@@ -227,6 +227,14 @@ def cmd_robustness(cfg, a):
           f"random >= real in {b['share_random_ge_real']:.0%} of {b['n_seeds']} runs")
 
 
+def cmd_paper(cfg, a):
+    from .paper import update
+    st = update(a.registry, cfg, a.raw, a.out)
+    print(Path(a.out, "README.md").read_text())
+    if st.get("funding_estimated_since"):
+        print("(funding estimated since", st["funding_estimated_since"], ")")
+
+
 def cmd_holdout(cfg, a):
     if HOLDOUT_LOCK.exists() and not a.force:
         print("Holdout already opened:", HOLDOUT_LOCK.read_text())
@@ -274,6 +282,11 @@ def main(argv=None):
     rb.add_argument("--sub-bot", required=True, choices=["trend_pullback", "vol_breakout", "vwap_reversion", "funding_momentum"])
     rb.add_argument("--timeframe", choices=["15m", "1h", "4h"], default="4h")
     rb.add_argument("--seeds", type=int, default=40)
+    pp = sub.add_parser("paper", help="update forward paper trading from the registry")
+    pp.add_argument("action", choices=["update"])
+    pp.add_argument("--registry", default="paper/PAPER.json")
+    pp.add_argument("--raw", default="data/forward_raw")
+    pp.add_argument("--out", default="paper-results")
     hb = sub.add_parser("holdout-bots", help="one-shot holdout test of pre-registered sub-bots")
     hb.add_argument("--prereg", default="research/2026-09-25-holdout-bots.json")
     hb.add_argument("--confirm", action="store_true")
@@ -283,7 +296,7 @@ def main(argv=None):
     logging.basicConfig(level=logging.INFO if a.verbose else logging.WARNING, format="%(levelname)s %(message)s")
     cfg = load_config(a.config)
     {"download": cmd_download, "process": cmd_process, "backtest": cmd_backtest,
-     "walkforward": cmd_walkforward, "bots": cmd_bots, "holdout-bots": cmd_holdout_bots, "robustness": cmd_robustness, "holdout": cmd_holdout}[a.cmd](cfg, a)
+     "walkforward": cmd_walkforward, "bots": cmd_bots, "holdout-bots": cmd_holdout_bots, "robustness": cmd_robustness, "paper": cmd_paper, "holdout": cmd_holdout}[a.cmd](cfg, a)
 
 
 if __name__ == "__main__":

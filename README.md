@@ -26,6 +26,21 @@ pte holdout-bots --confirm           # one-shot holdout test of the sub-bots pre
 pte robustness --sub-bot vol_breakout --timeframe 4h   # settings plateau, splits, bootstrap, random-entry baseline
 ```
 
+## Paper trading
+
+`paper/PAPER.json` registers which sub-bots are paper-traded forward, from when, and the review bar.
+A GitHub Actions workflow (`.github/workflows/paper.yml`) runs daily: it downloads new archive data
+from data.binance.vision, re-runs every entry with the same engine as the backtests, and commits
+the results to the **`paper-results`** branch (`README.md` there is the scoreboard).
+
+- Prices: daily 15m archive files, about one day behind real time.
+- Funding: estimated from the 1m premium index until Binance publishes the monthly file, so the
+  current month is provisional (the estimate matched the real rate's side of 0.01% in 98-100% of
+  settlements in Jul-Aug 2026).
+- Entries are never edited. New rules get a new entry with its own start date; the runner refuses
+  to run if an existing entry's rules change.
+- Run it locally with `pte paper update`. No money is involved.
+
 ## Sub-bots
 
 One bot, five sub-bots. Each trades the **full account on its own** — own capital, risk engine, positions,

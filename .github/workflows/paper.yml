@@ -1,0 +1,66 @@
+name: paper-trading
+
+# Daily forward paper trading. Downloads new Binance archive data, re-runs every
+# registered sub-bot from paper/PAPER.json, and commits the results to the
+# `paper-results` branch. Code and rules come from main; nothing here trades money.
+
+on:
+  schedule:
+    - cron: "37 3 * * *"      # 03:37 UTC daily, after Binance publishes the previous day's files
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: paper-trading
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Tests
+        run: pytest -q
+
+      - name: Restore downloaded archives
+        uses: actions/cache@v4
+        with:
+          path: data/forward_raw
+          key: forward-raw-${{ github.run_id }}
+          restore-keys: forward-raw-
+
+      - name: Check out results branch
+        run: |
+          if git ls-remote --exit-code --heads origin paper-results >/dev/null; then
+            git fetch origin paper-results
+            git worktree add paper-results origin/paper-results
+          else
+            git worktree add --detach paper-results
+            cd paper-results && git checkout --orphan paper-results && git rm -rq --cached . && git clean -fdq
+          fi
+
+      - name: Update paper trading
+        run: pte paper update --registry paper/PAPER.json --raw data/forward_raw --out paper-results
+
+      - name: Commit results
+        run: |
+          cd paper-results
+          git config user.name "paper-trading-bot"
+          git config user.email "paper-trading-bot@users.noreply.github.com"
+          git add -A
+          git commit -qm "Paper update $(date -u +%F)" || { echo "no changes"; exit 0; }
+          git push origin HEAD:paper-results

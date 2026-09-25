@@ -1,0 +1,54 @@
+{
+  "id": "paper-2026-09",
+  "registered_at": "2026-09-25",
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT"
+  ],
+  "history_start": "2023-01",
+  "data_source": "data.binance.vision archives (daily 15m klines; funding estimated from 1m premium index until the monthly file is published)",
+  "rules": "live risk rules; same engine as backtests; recomputed from history_start on every run",
+  "entries": [
+    {
+      "id": "trend_pullback_4h",
+      "sub_bot": "trend_pullback",
+      "timeframe": "4h",
+      "registered": "2026-09-25",
+      "scoring_start": "2026-09-01",
+      "entry_hash": "937b4c86bb6f",
+      "status_at_registration": "shelved after failing the 2025-09..2026-08 holdout; paper-traded as a forward control",
+      "expected_trades_per_year_2020_2025": 73
+    },
+    {
+      "id": "funding_momentum_1h",
+      "sub_bot": "funding_momentum",
+      "timeframe": "1h",
+      "registered": "2026-09-25",
+      "scoring_start": "2026-09-01",
+      "entry_hash": "cb428c336b3f",
+      "status_at_registration": "shelved after failing the 2025-09..2026-08 holdout; paper-traded as a forward control",
+      "expected_trades_per_year_2020_2025": 103
+    },
+    {
+      "id": "vol_breakout_4h",
+      "sub_bot": "vol_breakout",
+      "timeframe": "4h",
+      "registered": "2026-09-25",
+      "scoring_start": "2026-09-01",
+      "entry_hash": "d5496e960fd9",
+      "status_at_registration": "shelved after failing the 2025-09..2026-08 holdout; paper-traded as a forward control",
+      "expected_trades_per_year_2020_2025": 18
+    }
+  ],
+  "review": {
+    "date": "2027-03-01",
+    "criteria_per_entry": {
+      "closed_trades_gte": "quarter of its 2020-2025 annual rate",
+      "net_return_gt": 0.0,
+      "profit_factor_gte": 1.1,
+      "not_halted": true
+    },
+    "meaning": "An entry that passes on six months of genuinely new data becomes a candidate for a small live account (Phase 6). Anything else stays shelved."
+  },
+  "adding_entries": "New rules are added as NEW entries with their own registered date and scoring_start = the day after registration. Existing entries are never edited; the runner refuses to run if an entry's rules change."
+}
