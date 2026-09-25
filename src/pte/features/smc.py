@@ -174,7 +174,8 @@ def htf_bias(df: pd.DataFrame, rule: str, n: int) -> pd.Series:
     agg = agg[counts == need].dropna()
     st = structure(agg, n)
     avail = pd.DataFrame({"avail": agg.index + pd.Timedelta(rule), "htf_trend": st["trend"].to_numpy()})
-    base_close = pd.DataFrame({"close_time": df.index + base})
+    base_close = pd.DataFrame({"close_time": (df.index + base).astype("datetime64[ns, UTC]")})
+    avail["avail"] = avail["avail"].astype("datetime64[ns, UTC]")
     merged = pd.merge_asof(base_close, avail, left_on="close_time", right_on="avail", direction="backward")
     return pd.Series(merged["htf_trend"].fillna(0).astype(int).to_numpy(), index=df.index, name="htf_trend")
 

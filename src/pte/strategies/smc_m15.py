@@ -25,11 +25,13 @@ import pandas as pd
 class OrderIntent:
     signal_idx: int        # bar on whose close the signal fired
     side: int              # +1 long, -1 short
-    entry: float
+    entry: float           # limit price; for market orders, the signal close (reference only)
     stop: float
-    target: float
+    target: float          # use +/-inf for no target
     expires_idx: int       # last bar on which the limit may fill
     time_exit_bars: int
+    entry_type: str = "limit"        # "limit" or "market" (fills at next bar open)
+    trail_atr: float | None = None   # trailing stop distance in ATRs, updated on each bar close
 
 
 def generate_signals(f: pd.DataFrame, cfg: dict) -> list[OrderIntent]:

@@ -98,6 +98,38 @@ def cmd_walkforward(cfg, a):
     _print_kill(kill_check(out["summary"], cfg["kill_criteria"]))
 
 
+def cmd_bots(cfg, a):
+    from .bots import bot_report
+    bars, funding = _synthetic(cfg, a.synthetic) if a.synthetic else _load(cfg)
+    start = None if a.synthetic else pd.Timestamp(cfg["bots"]["report_start"], tz="UTC")
+    rep = bot_report(bars, funding, cfg, start=start)
+    t = rep["sleeves"]
+    first = min(df.index[0] for df in bars.values()) if start is None else start
+    last = min(df.index[-1] for df in bars.values())
+    print(f"Sub-bots, each trading the full ${cfg['risk']['initial_equity']:,.0f} independently")
+    print(f"Window: {first.date()} .. {last.date()} ({'SYNTHETIC' if a.synthetic else 'real'} data, holdout excluded)\n")
+    fmt = t.copy()
+    for col in ("return", "max_dd", "win_rate", "profitable_halves"):
+        fmt[col] = fmt[col].map(lambda v: f"{v:+.1%}" if col == "return" else f"{v:.0%}")
+    for col in ("sharpe", "pf", "pf_2x_costs", "avg_r", "gross_avg_r"):
+        fmt[col] = fmt[col].map(lambda v: f"{v:.2f}")
+    fmt["passes"] = fmt["passes"].map(lambda v: f"{v}/5")
+    with pd.option_context("display.width", 200, "display.max_columns", 30):
+        print(fmt.to_string())
+        print("\nDaily-return correlation between sub-bots:")
+        print(rep["correlation"].round(2).to_string())
+    REPORTS.mkdir(exist_ok=True)
+    t.to_csv(REPORTS / "bots_summary.csv")
+    rep["correlation"].to_csv(REPORTS / "bots_correlation.csv")
+    for name, r in rep["result"].sleeves.items():
+        r.trades.to_csv(REPORTS / f"bots_{name}_trades.csv", index=False)
+        r.equity.resample("1D").last().to_csv(REPORTS / f"bots_{name}_equity_daily.csv")
+    log = ExperimentLog(REPORTS / ("experiments_synthetic.jsonl" if a.synthetic else "experiments.jsonl"))
+    for name, row in t.iterrows():
+        log.write(kind="bot_sleeve", sleeve=name, trades=int(row.trades), sharpe=float(row.sharpe),
+                  profit_factor=float(row.pf), start=first, end=last)
+
+
 def cmd_holdout(cfg, a):
     if HOLDOUT_LOCK.exists() and not a.force:
         print("Holdout already opened:", HOLDOUT_LOCK.read_text())
@@ -135,13 +167,15 @@ def main(argv=None):
         s = sub.add_parser(name)
         s.add_argument("--synthetic", type=int, default=0, metavar="N_BARS",
                        help="run on N synthetic bars instead of real data (pipeline check only)")
+    b = sub.add_parser("bots", help="run all five sub-bots, each on the full account, and report separately")
+    b.add_argument("--synthetic", type=int, default=0, metavar="N_BARS")
     h = sub.add_parser("holdout", help="open the locked holdout once")
     h.add_argument("--confirm", action="store_true"); h.add_argument("--force", action="store_true")
     a = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO if a.verbose else logging.WARNING, format="%(levelname)s %(message)s")
     cfg = load_config(a.config)
     {"download": cmd_download, "process": cmd_process, "backtest": cmd_backtest,
-     "walkforward": cmd_walkforward, "holdout": cmd_holdout}[a.cmd](cfg, a)
+     "walkforward": cmd_walkforward, "bots": cmd_bots, "holdout": cmd_holdout}[a.cmd](cfg, a)
 
 
 if __name__ == "__main__":

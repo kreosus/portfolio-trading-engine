@@ -12,14 +12,32 @@ walk-forward validation, a locked holdout, and kill criteria fixed before any re
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                               # 29 tests, including look-ahead checks
+pytest                               # 39 tests, including look-ahead checks
 
 pte download                         # Binance USD-M archives -> data/raw (BTCUSDT, ETHUSDT, 15m + funding)
 pte process                          # raw zips -> data/processed/*.parquet
 pte backtest                         # single run on development data (holdout excluded)
 pte walkforward                      # walk-forward + kill-criteria verdict -> reports/
+pte bots                             # all five sub-bots, each on the full account, reported separately
 pte holdout --confirm                # opens the locked holdout ONCE, at the end of Phase 1
 ```
+
+## Sub-bots
+
+One bot, five sub-bots. Each trades the **full account on its own** — own capital, risk engine, positions,
+trades and equity — and is reported separately. There is no combined portfolio. Rules are in
+`src/pte/strategies/` and parameters under `bots:` in `config/default.yaml` (fixed before testing).
+
+| Sub-bot | Idea |
+| --- | --- |
+| `smc` | Phase 1 M15 liquidity/SMC (shelved: failed kill criteria) |
+| `trend_pullback` | EMA200 > EMA800 trend, EMA50 reclaim, ATR trailing stop |
+| `vol_breakout` | Bollinger squeeze, 48-bar breakout on volume, ATR trailing stop |
+| `vwap_reversion` | > 2.5 ATR from day VWAP, RSI extreme, exhaustion bar, target VWAP |
+| `funding_momentum` | 3-day momentum at funding settlements, filtered by uncrowded funding |
+
+Disable one with `enabled: false`. Add one by writing a function `f(features, params) -> list[OrderIntent]`
+in `strategies/library.py`, registering it in `REGISTRY`, and adding its block to the config.
 
 Pipeline check without real data: `pte walkforward --synthetic 110000` (a random walk should fail the kill criteria).
 
@@ -31,7 +49,8 @@ src/pte/data/                Binance archive downloader (checksummed), parquet s
 src/pte/features/            causal indicators + SMC detectors (swings, BOS/CHoCH, sweeps, displacement, FVG, OB, HTF bias)
 src/pte/strategies/smc_m15   Strategy A: sweep -> displacement + BOS/CHoCH -> FVG limit entry
 src/pte/risk.py              risk engine: drawdown ladder, daily/weekly limits, open-risk and leverage caps, halt
-src/pte/backtest/            event-driven portfolio backtester, cost model, metrics
+src/pte/backtest/            event-driven backtester (independent sub-bots), cost model, metrics
+src/pte/bots.py              builds and reports the five sub-bots
 src/pte/research/            walk-forward, experiment log, kill criteria
 ```
 

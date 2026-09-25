@@ -1,22 +1,32 @@
-"""Event-driven, bar-by-bar portfolio backtester.
+"""Event-driven, bar-by-bar backtester for one or more independent sub-bots.
+
+Each sub-bot (sleeve) runs separately: its own capital (allocation x
+initial_equity; the bot uses 1.0 = full account each), cash, positions,
+pending orders, risk engine, trades and equity. Sub-bots never share state.
+An optional portfolio_halt stops all sub-bots when their summed equity draws
+down past it; the bot does not use it.
 
 Fill rules (conservative by design):
-- A signal on bar i's close creates a limit order that is live from bar i+1.
-- A limit fills only if price trades THROUGH it (long: low < entry). Fill price
-  is min(open, entry) for longs — a gap through the level fills at the open.
-- If the bar opens beyond the stop, the order is cancelled (setup invalidated).
-- If the target is reached before the order fills, the order is cancelled.
-- On the fill bar only the stop is checked (target ignored: order unknown).
+- A signal on bar i's close creates an order that is live from bar i+1.
+- Market orders fill at bar i+1's open plus slippage, taker fee.
+- Limit orders fill only if price trades THROUGH the level (long: low < entry),
+  at min(open, entry) for longs; maker fee. Cancelled if the bar opens beyond
+  the stop, or if the target trades before the fill.
+- On the fill bar only the stop is checked (intra-bar order is unknowable).
 - Stop and target touched in the same bar -> stop.
-- Stops fill at the worse of stop price and bar open, plus slippage, taker fee.
-- Targets fill at the target price, taker fee (conservative), no slippage.
-- Time exits and end-of-window exits fill at the close, plus slippage, taker fee.
-- Funding is charged at each settlement time on positions held into it.
+- Stops fill at the worse of stop and open, plus slippage, taker fee.
+- Targets fill at the target price, taker fee, no slippage.
+- Trailing stops move only on bar closes and only in the trade's favour.
+- Time exits and end-of-window exits fill at the close plus slippage, taker fee.
+- Funding is charged at each settlement on positions held into it.
+- R-multiples use the INITIAL stop distance.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import copy
+import math
+from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
@@ -32,11 +42,13 @@ class Position:
     qty: float
     entry: float
     stop: float
+    init_stop: float
     target: float
     entry_idx: int
     entry_time: pd.Timestamp
     time_exit_bars: int
     fees: float
+    trail_atr: float | None = None
     funding: float = 0.0
     risk_frac: float = 0.0
 
@@ -50,12 +62,149 @@ class BacktestResult:
     initial_equity: float
 
 
-def run_backtest(features: dict[str, pd.DataFrame], intents: dict[str, list[OrderIntent]],
-                 funding: dict[str, pd.DataFrame], risk_cfg: dict, costs: CostModel,
-                 start: pd.Timestamp | None = None, end: pd.Timestamp | None = None) -> BacktestResult:
+@dataclass
+class SleeveSpec:
+    name: str
+    intents: dict[str, list[OrderIntent]]
+    allocation: float = 1.0
+
+
+@dataclass
+class PortfolioResult:
+    sleeves: dict[str, BacktestResult]
+    equity: pd.Series
+    initial_equity: float
+    halted_at: object
+
+
+class _Sleeve:
+    def __init__(self, spec: SleeveSpec, risk_cfg: dict, costs: CostModel, arr: dict):
+        self.name = spec.name
+        self.costs = costs
+        self.arr = arr
+        cfg = copy.deepcopy(risk_cfg)
+        cfg["initial_equity"] = risk_cfg["initial_equity"] * spec.allocation
+        self.initial = cfg["initial_equity"]
+        self.risk = RiskEngine(cfg)
+        self.cash = self.initial
+        self.positions: dict[str, Position] = {}
+        self.pending: dict[str, OrderIntent] = {}
+        self.intents = {s: {it.signal_idx: it for it in lst} for s, lst in spec.intents.items()}
+        self.trades: list[dict] = []
+        self.eq: list[float] = []
+
+    def mtm(self, last_close: dict) -> float:
+        return self.cash + sum(p.side * p.qty * (last_close[s] - p.entry)
+                               for s, p in self.positions.items() if s in last_close)
+
+    def close(self, s, price, ts, idx, reason):
+        p = self.positions.pop(s)
+        fee = self.costs.fee(p.qty * price, taker=True)
+        gross = p.side * p.qty * (price - p.entry)
+        self.cash += gross - fee
+        fees = p.fees + fee
+        net = gross - fees - p.funding
+        risk_usd = p.qty * abs(p.entry - p.init_stop)
+        self.trades.append(dict(
+            sleeve=self.name, symbol=s, side=p.side, entry_time=p.entry_time, exit_time=ts,
+            entry=p.entry, exit=price, stop=p.init_stop, target=p.target, qty=p.qty, gross=gross,
+            fees=fees, funding=p.funding, pnl=net, r=net / risk_usd if risk_usd > 0 else np.nan,
+            reason=reason, bars_held=idx - p.entry_idx, risk_frac=p.risk_frac,
+        ))
+        self.risk.on_trade_closed(net, idx)
+
+    def fill(self, s, it: OrderIntent, price, ts, idx, last_close, taker: bool):
+        a = self.arr[s]
+        equity = self.mtm(last_close)
+        open_risk = sum(p.qty * abs(p.entry - p.stop) for p in self.positions.values())
+        stop = it.stop
+        if it.entry_type == "market":
+            # keep the planned stop DISTANCE when the open differs from the signal close
+            stop = price - it.side * abs(it.entry - it.stop)
+        qty = self.risk.size(equity=equity, entry=price, stop=stop, elevated_vol=bool(a["ev"][idx]),
+                             open_risk=open_risk, bar_idx=idx, positions_on_symbol=int(s in self.positions))
+        if qty <= 0:
+            return
+        fee = self.costs.fee(qty * price, taker=taker)
+        self.cash -= fee
+        target = it.target
+        if it.entry_type == "market" and math.isfinite(it.target):
+            target = price + (it.target - it.entry)
+        self.positions[s] = Position(it.side, qty, price, stop, stop, target, idx, ts, it.time_exit_bars,
+                                     fee, it.trail_atr, risk_frac=qty * abs(price - stop) / equity)
+        if it.side == 1 and a["l"][idx] <= stop:
+            self.close(s, self.costs.slip(min(a["o"][idx], stop), -1), ts, idx, "stop")
+        elif it.side == -1 and a["h"][idx] >= stop:
+            self.close(s, self.costs.slip(max(a["o"][idx], stop), 1), ts, idx, "stop")
+
+    def on_symbol_bar(self, s, i, ts, last_close, halted: bool):
+        a, costs = self.arr[s], self.costs
+        o, h, l, c = a["o"][i], a["h"][i], a["l"][i], a["c"][i]
+
+        if s in self.positions and ts in a["funding"]:
+            p = self.positions[s]
+            pay = p.side * p.qty * o * a["rates"][ts]
+            self.cash -= pay
+            p.funding += pay
+
+        if s in self.positions:
+            p = self.positions[s]
+            if p.side == 1:
+                if l <= p.stop:
+                    self.close(s, costs.slip(min(o, p.stop), -1), ts, i, "stop")
+                elif h >= p.target:
+                    self.close(s, p.target, ts, i, "target")
+            else:
+                if h >= p.stop:
+                    self.close(s, costs.slip(max(o, p.stop), 1), ts, i, "stop")
+                elif l <= p.target:
+                    self.close(s, p.target, ts, i, "target")
+            if s in self.positions and i - p.entry_idx >= p.time_exit_bars:
+                self.close(s, costs.slip(c, -p.side), ts, i, "time")
+
+        it = self.pending.get(s)
+        if it is not None and s not in self.positions:
+            if i > it.expires_idx or halted:
+                self.pending.pop(s)
+            elif it.entry_type == "market":
+                self.pending.pop(s)
+                self.fill(s, it, costs.slip(o, it.side), ts, i, last_close, taker=True)
+            elif it.side == 1:
+                if o <= it.stop:
+                    self.pending.pop(s)
+                elif l < it.entry:
+                    self.pending.pop(s)
+                    self.fill(s, it, min(o, it.entry), ts, i, last_close, taker=False)
+                elif h >= it.target:
+                    self.pending.pop(s)
+            else:
+                if o >= it.stop:
+                    self.pending.pop(s)
+                elif h > it.entry:
+                    self.pending.pop(s)
+                    self.fill(s, it, max(o, it.entry), ts, i, last_close, taker=False)
+                elif l <= it.target:
+                    self.pending.pop(s)
+
+        # trailing stop update on the close (applies from next bar)
+        p = self.positions.get(s)
+        if p is not None and p.trail_atr and not np.isnan(a["atr"][i]):
+            if p.side == 1:
+                p.stop = max(p.stop, c - p.trail_atr * a["atr"][i])
+            else:
+                p.stop = min(p.stop, c + p.trail_atr * a["atr"][i])
+
+    def queue_signal(self, s, i, halted: bool):
+        new = self.intents.get(s, {}).get(i)
+        if new is not None and not halted and not self.risk.s.halted:
+            self.pending[s] = new
+
+
+def run_portfolio(features: dict[str, pd.DataFrame], sleeves: list[SleeveSpec],
+                  funding: dict[str, pd.DataFrame], risk_cfg: dict, costs: CostModel,
+                  start=None, end=None, portfolio_halt: float | None = None) -> PortfolioResult:
     symbols = list(features)
-    timeline = sorted(set().union(*[set(features[s].index) for s in symbols]))
-    timeline = pd.DatetimeIndex(timeline)
+    timeline = pd.DatetimeIndex(sorted(set().union(*[set(features[s].index) for s in symbols])))
     if start is not None:
         timeline = timeline[timeline >= start]
     if end is not None:
@@ -66,139 +215,70 @@ def run_backtest(features: dict[str, pd.DataFrame], intents: dict[str, list[Orde
         f = features[s]
         arr[s] = dict(
             pos=f.index.get_indexer(timeline),
-            o=f["open"].to_numpy(), h=f["high"].to_numpy(), l=f["low"].to_numpy(),
-            c=f["close"].to_numpy(),
+            o=f["open"].to_numpy(), h=f["high"].to_numpy(), l=f["low"].to_numpy(), c=f["close"].to_numpy(),
+            atr=f["atr"].to_numpy() if "atr" in f else np.full(len(f), np.nan),
             ev=f["elevated_vol"].to_numpy() if "elevated_vol" in f else np.zeros(len(f), bool),
             funding=set(funding[s].index) if s in funding else set(),
             rates=funding[s]["rate"].to_dict() if s in funding else {},
-            intents={it.signal_idx: it for it in intents.get(s, [])},
         )
-
-    risk = RiskEngine(risk_cfg)
-    cash = risk_cfg["initial_equity"]
-    positions: dict[str, Position] = {}
-    pending: dict[str, OrderIntent] = {}
+    books = [_Sleeve(sp, risk_cfg, costs, arr) for sp in sleeves]
+    total0 = sum(b.initial for b in books)
     last_close: dict[str, float] = {}
-    trades: list[dict] = []
-    eq_times, eq_vals = [], []
-
-    def mtm() -> float:
-        return cash + sum(p.side * p.qty * (last_close[s] - p.entry) for s, p in positions.items())
-
-    def close_pos(s: str, price: float, taker: bool, ts, idx: int, reason: str) -> None:
-        nonlocal cash
-        p = positions.pop(s)
-        fee = costs.fee(p.qty * price, taker=taker)
-        gross = p.side * p.qty * (price - p.entry)
-        cash += gross - fee
-        fees = p.fees + fee
-        net = gross - fees - p.funding
-        risk_usd = p.qty * abs(p.entry - p.stop)
-        trades.append(dict(
-            symbol=s, side=p.side, entry_time=p.entry_time, exit_time=ts, entry=p.entry, exit=price,
-            stop=p.stop, target=p.target, qty=p.qty, gross=gross, fees=fees, funding=p.funding,
-            pnl=net, r=net / risk_usd if risk_usd > 0 else np.nan, reason=reason,
-            bars_held=idx - p.entry_idx, risk_frac=p.risk_frac,
-        ))
-        risk.on_trade_closed(net, idx)
-
-    def try_fill(s: str, it: OrderIntent, price: float, ts, idx: int, elevated: bool) -> None:
-        nonlocal cash
-        equity = mtm() if last_close else cash
-        open_risk = sum(p.qty * abs(p.entry - p.stop) for p in positions.values())
-        qty = risk.size(equity=equity, entry=price, stop=it.stop, elevated_vol=bool(elevated),
-                        open_risk=open_risk, bar_idx=idx, positions_on_symbol=int(s in positions))
-        if qty <= 0:
-            return
-        fee = costs.fee(qty * price, taker=False)
-        cash -= fee
-        positions[s] = Position(it.side, qty, price, it.stop, it.target, idx, ts,
-                                it.time_exit_bars, fee, risk_frac=qty * abs(price - it.stop) / equity)
-        a = arr[s]
-        # fill bar: stop only (intra-bar order of target vs fill is unknowable)
-        if it.side == 1 and a["l"][idx] <= it.stop:
-            close_pos(s, costs.slip(it.stop, -1), True, ts, idx, "stop")
-        elif it.side == -1 and a["h"][idx] >= it.stop:
-            close_pos(s, costs.slip(it.stop, 1), True, ts, idx, "stop")
+    peak = total0
+    halted_at = None
+    port_eq = []
 
     for t_i, ts in enumerate(timeline):
-        risk.on_bar(ts, mtm() if last_close else cash)
-        if risk.s.halted:
-            pending.clear()
+        halted = halted_at is not None
+        for b in books:
+            b.risk.on_bar(ts, b.mtm(last_close))
+            if b.risk.s.halted:
+                b.pending.clear()
         for s in symbols:
-            a = arr[s]
-            i = int(a["pos"][t_i])
+            i = int(arr[s]["pos"][t_i])
             if i < 0:
                 continue
-            o, h, l, c = a["o"][i], a["h"][i], a["l"][i], a["c"][i]
+            for b in books:
+                b.on_symbol_bar(s, i, ts, last_close, halted)
+            last_close[s] = arr[s]["c"][i]
+            for b in books:
+                b.queue_signal(s, i, halted)
+        total = 0.0
+        for b in books:
+            e = b.mtm(last_close)
+            b.eq.append(e)
+            total += e
+        port_eq.append(total)
+        peak = max(peak, total)
+        if portfolio_halt is not None and halted_at is None and 1 - total / peak >= portfolio_halt:
+            halted_at = ts
+            for b in books:
+                b.pending.clear()
 
-            # 1) funding on positions held into this settlement
-            if s in positions and ts in a["funding"]:
-                p = positions[s]
-                pay = p.side * p.qty * o * a["rates"][ts]
-                cash -= pay
-                p.funding += pay
-
-            # 2) exits for positions opened on earlier bars
-            if s in positions:
-                p = positions[s]
-                if p.side == 1:
-                    if l <= p.stop:
-                        close_pos(s, costs.slip(min(o, p.stop), -1), True, ts, i, "stop")
-                    elif h >= p.target:
-                        close_pos(s, p.target, True, ts, i, "target")
-                else:
-                    if h >= p.stop:
-                        close_pos(s, costs.slip(max(o, p.stop), 1), True, ts, i, "stop")
-                    elif l <= p.target:
-                        close_pos(s, p.target, True, ts, i, "target")
-                if s in positions and i - p.entry_idx >= p.time_exit_bars:
-                    close_pos(s, costs.slip(c, -p.side), True, ts, i, "time")
-
-            # 3) pending limit order
-            it = pending.get(s)
-            if it is not None and s not in positions:
-                if i > it.expires_idx:
-                    pending.pop(s)
-                elif it.side == 1:
-                    if o <= it.stop:
-                        pending.pop(s)
-                    elif l < it.entry:
-                        pending.pop(s)
-                        try_fill(s, it, min(o, it.entry), ts, i, a["ev"][i])
-                    elif h >= it.target:
-                        pending.pop(s)
-                else:
-                    if o >= it.stop:
-                        pending.pop(s)
-                    elif h > it.entry:
-                        pending.pop(s)
-                        try_fill(s, it, max(o, it.entry), ts, i, a["ev"][i])
-                    elif l <= it.target:
-                        pending.pop(s)
-
-            last_close[s] = c
-
-            # 4) new signal on this bar's close -> live from next bar
-            new = a["intents"].get(i)
-            if new is not None and not risk.s.halted:
-                pending[s] = new
-
-        eq_times.append(ts)
-        eq_vals.append(mtm())
-
-    # flatten at end of window
     if len(timeline):
-        for s in list(positions):
-            a = arr[s]
-            idx = int(a["pos"][-1]) if a["pos"][-1] >= 0 else len(a["c"]) - 1
-            close_pos(s, costs.slip(last_close[s], -positions[s].side), True, timeline[-1], idx, "end")
-        if eq_vals:
-            eq_vals[-1] = cash
+        for b in books:
+            for s in list(b.positions):
+                idx = int(arr[s]["pos"][-1]) if arr[s]["pos"][-1] >= 0 else len(arr[s]["c"]) - 1
+                b.close(s, costs.slip(last_close[s], -b.positions[s].side), timeline[-1], idx, "end")
+            if b.eq:
+                b.eq[-1] = b.cash
+        if port_eq:
+            port_eq[-1] = sum(b.cash for b in books)
 
-    return BacktestResult(
-        trades=pd.DataFrame(trades), equity=pd.Series(eq_vals, index=pd.DatetimeIndex(eq_times), name="equity"),
-        risk_blocks=dict(risk.s.blocks), halted_at=risk.s.halt_time,
-        initial_equity=risk_cfg["initial_equity"],
-    )
+    idx = pd.DatetimeIndex(timeline)
+    results = {b.name: BacktestResult(
+        trades=pd.DataFrame(b.trades), equity=pd.Series(b.eq, index=idx, name=b.name),
+        risk_blocks=dict(b.risk.s.blocks), halted_at=b.risk.s.halt_time, initial_equity=b.initial,
+    ) for b in books}
+    return PortfolioResult(results, pd.Series(port_eq, index=idx, name="portfolio"), total0, halted_at)
 
+
+def run_backtest(features: dict[str, pd.DataFrame], intents: dict[str, list[OrderIntent]],
+                 funding: dict[str, pd.DataFrame], risk_cfg: dict, costs: CostModel,
+                 start: pd.Timestamp | None = None, end: pd.Timestamp | None = None) -> BacktestResult:
+    """Single-strategy backtest: one sleeve holding all capital."""
+    res = run_portfolio(features, [SleeveSpec("main", intents, 1.0)], funding, risk_cfg, costs, start, end)
+    r = res.sleeves["main"]
+    if not r.trades.empty:
+        r.trades = r.trades.drop(columns="sleeve")
+    return r

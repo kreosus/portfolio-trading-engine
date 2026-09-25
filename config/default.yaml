@@ -62,3 +62,36 @@ kill_criteria:
   min_sharpe: 1.0
   min_profit_factor_2x_costs: 1.0
   min_profitable_fold_frac: 0.6
+
+# One bot, five sub-bots. Each sub-bot trades the FULL account on its own
+# (risk.initial_equity, own risk engine, own trades) and is reported separately.
+# There is no combined portfolio. Parameters are fixed before testing.
+bots:
+  report_start: "2020-04-01"    # after indicator warm-up
+  sleeves:
+    smc:
+      enabled: true
+      status: shelved           # failed Phase 1 kill criteria (2026-09-25); kept as a baseline
+    trend_pullback:
+      enabled: true
+      stop_atr: 2.0
+      trail_atr: 3.0
+      time_exit_bars: 480
+    vol_breakout:
+      enabled: true
+      squeeze_pct: 0.20
+      vol_mult: 1.5
+      stop_atr: 1.5
+      trail_atr: 2.5
+      time_exit_bars: 192
+    vwap_reversion:
+      enabled: true
+      dev_atr: 2.5
+      rsi_lo: 25
+      stop_atr: 1.5
+      time_exit_bars: 32
+    funding_momentum:
+      enabled: true
+      funding_baseline: 0.0001
+      stop_atr: 3.0
+      time_exit_bars: 96
