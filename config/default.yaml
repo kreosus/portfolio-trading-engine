@@ -1,0 +1,64 @@
+# Phase 1 defaults. These are fixed BEFORE testing. Do not tune risk values for returns.
+
+data:
+  symbols: [BTCUSDT, ETHUSDT]
+  interval: 15m
+  start: "2020-01"          # first month to download (YYYY-MM)
+  raw_dir: data/raw
+  processed_dir: data/processed
+  holdout_months: 12        # most recent N months are locked until Phase 1 ends
+
+smc:
+  swing_n: 3                # bars on each side for a swing point
+  atr_period: 14
+  displacement_body_atr: 1.2
+  displacement_close_frac: 0.25   # close within outer 25% of range
+  fvg_min_atr: 0.1
+  htf_rule: 1h              # higher-timeframe bias timeframe
+  htf_swing_n: 3
+
+strategy:
+  setup_window: 20          # bars from sweep to structure break
+  entry_valid_bars: 16
+  stop_buffer_atr: 0.1
+  target_r: 2.0
+  time_exit_bars: 96
+
+costs:
+  maker_fee: 0.0002         # Binance USD-M VIP0 at time of writing; verify
+  taker_fee: 0.0005
+  slippage_bps: 2.0         # applied to taker (stop / time-exit) fills
+  multiplier: 1.0           # 2.0 for the cost-stress run
+
+risk:
+  initial_equity: 10000.0
+  risk_normal: 0.005
+  risk_elevated_vol: 0.0025
+  risk_drawdown_5: 0.0015
+  drawdown_reduce: 0.05
+  drawdown_halt: 0.08
+  vol_percentile: 0.80
+  vol_lookback_bars: 2880   # 30 days of M15
+  max_daily_loss: 0.02
+  max_weekly_loss: 0.04
+  max_open_risk: 0.015
+  max_leverage: 3.0
+  max_consecutive_losses: 6
+  loss_pause_bars: 96
+  max_positions_per_symbol: 1
+
+walkforward:
+  train_months: 24
+  test_months: 6
+  step_months: 6
+  min_train_trades: 30
+  grid:
+    swing_n: [2, 3, 5]
+    target_r: [1.5, 2.0, 3.0]
+
+kill_criteria:
+  min_oos_trades: 200
+  min_profit_factor: 1.2
+  min_sharpe: 1.0
+  min_profit_factor_2x_costs: 1.0
+  min_profitable_fold_frac: 0.6
