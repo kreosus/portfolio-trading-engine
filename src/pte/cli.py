@@ -138,6 +138,77 @@ def cmd_bots(cfg, a):
                   profit_factor=float(row.pf), start=first, end=last)
 
 
+def cmd_holdout_bots(cfg, a):
+    """One-shot holdout test of pre-registered sub-bots. Reads everything from the JSON."""
+    from .backtest.metrics import summarize
+    from .bots import run_bot
+    from .config import config_hash
+    reg = json.loads(Path(a.prereg).read_text())
+    lock = REPORTS / f"HOLDOUT_OPENED_{reg['id']}.json"
+    if lock.exists():
+        print("This holdout test was already run:", lock.read_text())
+        return
+    if not a.confirm:
+        print(f"Pre-registration {reg['id']} will use the locked holdout ONCE. Re-run with --confirm.")
+        return
+    dev, funding, hold = _load(cfg, include_holdout=True)
+    start = pd.Timestamp(reg["holdout_window"]["start"], tz="UTC")
+    assert min(h.index[0] for h in hold.values()) == start, "holdout window does not match pre-registration"
+    full15 = {s: pd.concat([dev[s], hold[s]]) for s in dev}
+    crit = reg["criteria"]
+    results, all_pass = [], True
+    for c in reg["candidates"]:
+        name, tf = c["sub_bot"], c["timeframe"]
+        run_cfg = with_overrides(cfg, {"smc.htf_rule": HTF_FOR[tf]})
+        if config_hash(run_cfg) != c["config_hash"]:
+            raise SystemExit(f"{name}: config changed since pre-registration ({config_hash(run_cfg)} != {c['config_hash']})")
+        only = {**run_cfg["bots"]["sleeves"]}
+        for k in only:
+            only[k] = {**only[k], "enabled": k == name}
+        run_cfg = {**run_cfg, "bots": {**run_cfg["bots"], "sleeves": only}}
+        bars = {s: resample_bars(df, tf) for s, df in full15.items()}
+        out = {}
+        for mode, rc in (("live", run_cfg),
+                         ("research", with_overrides(run_cfg, {"risk.drawdown_halt": 1.0,
+                                                               "risk.max_consecutive_losses": 10**9}))):
+            r1 = run_bot(bars, funding, rc, start=start).sleeves[name]
+            r2 = run_bot(bars, funding, with_overrides(rc, {"costs.multiplier": 2.0}), start=start).sleeves[name]
+            m = summarize(r1.trades, r1.equity, r1.initial_equity)
+            m2 = summarize(r2.trades, r2.equity, r2.initial_equity)
+            out[mode] = {**{k: m[k] for k in ("trades", "total_return", "sharpe", "profit_factor",
+                                                "max_drawdown", "win_rate", "avg_r")},
+                         "profit_factor_2x_costs": m2["profit_factor"], "halted_at": str(r1.halted_at)}
+            if mode == "live":
+                r1.trades.to_csv(REPORTS / f"holdout_{name}_{tf}_trades.csv", index=False)
+        L = out["live"]
+        checks = {
+            f"trades >= {c['min_trades']}": L["trades"] >= c["min_trades"],
+            "net return > 0": L["total_return"] > crit["net_return_gt"],
+            f"profit factor >= {crit['profit_factor_gte']}": L["profit_factor"] >= crit["profit_factor_gte"],
+            f"PF at 2x costs >= {crit['profit_factor_2x_costs_gte']}":
+                L["profit_factor_2x_costs"] >= crit["profit_factor_2x_costs_gte"],
+            "not halted": L["halted_at"] == "None",
+        }
+        passed = all(checks.values())
+        all_pass &= passed
+        results.append({"sub_bot": name, "timeframe": tf, "verdict": "PASS" if passed else "FAIL",
+                        "checks": checks, **out})
+        print(f"\n{name} {tf}: {'PASS' if passed else 'FAIL'}")
+        for k, v in checks.items():
+            print(f"  [{'PASS' if v else 'FAIL'}] {k}")
+        print(f"  live:     trades {L['trades']}, return {L['total_return']:+.2%}, PF {L['profit_factor']:.2f}, "
+              f"PF 2x {L['profit_factor_2x_costs']:.2f}, Sharpe {L['sharpe']:.2f}, max DD {L['max_drawdown']:.1%}, "
+              f"avg R {L['avg_r']:+.2f}, halted {L['halted_at']}")
+        R = out["research"]
+        print(f"  no halt:  trades {R['trades']}, return {R['total_return']:+.2%}, PF {R['profit_factor']:.2f}, "
+              f"Sharpe {R['sharpe']:.2f}, max DD {R['max_drawdown']:.1%}  (reported, not scored)")
+    rec = {"prereg": reg["id"], "opened_at": datetime.now(timezone.utc).isoformat(), "results": results}
+    REPORTS.mkdir(exist_ok=True)
+    lock.write_text(json.dumps(rec, indent=2, default=str))
+    ExperimentLog(REPORTS / "experiments.jsonl").write(kind="holdout_bots", prereg=reg["id"],
+                                                       verdicts={r["sub_bot"]: r["verdict"] for r in results})
+
+
 def cmd_holdout(cfg, a):
     if HOLDOUT_LOCK.exists() and not a.force:
         print("Holdout already opened:", HOLDOUT_LOCK.read_text())
@@ -181,13 +252,16 @@ def main(argv=None):
                    help="bar size; parameters are in bars, so 1h/4h span 4x/16x the time")
     b.add_argument("--research-mode", action="store_true",
                    help="turn off drawdown halt and loss-streak pause to measure the full-window edge")
+    hb = sub.add_parser("holdout-bots", help="one-shot holdout test of pre-registered sub-bots")
+    hb.add_argument("--prereg", default="research/2026-09-25-holdout-bots.json")
+    hb.add_argument("--confirm", action="store_true")
     h = sub.add_parser("holdout", help="open the locked holdout once")
     h.add_argument("--confirm", action="store_true"); h.add_argument("--force", action="store_true")
     a = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO if a.verbose else logging.WARNING, format="%(levelname)s %(message)s")
     cfg = load_config(a.config)
     {"download": cmd_download, "process": cmd_process, "backtest": cmd_backtest,
-     "walkforward": cmd_walkforward, "bots": cmd_bots, "holdout": cmd_holdout}[a.cmd](cfg, a)
+     "walkforward": cmd_walkforward, "bots": cmd_bots, "holdout-bots": cmd_holdout_bots, "holdout": cmd_holdout}[a.cmd](cfg, a)
 
 
 if __name__ == "__main__":

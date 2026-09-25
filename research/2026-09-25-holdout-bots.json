@@ -1,0 +1,86 @@
+{
+  "id": "2026-09-25-holdout-bots",
+  "registered_at": "2026-09-25",
+  "code_commit": "fe2d361",
+  "holdout_window": {
+    "start": "2025-09-01",
+    "end": "2026-08-31",
+    "note": "most recent 12 months; never used before this test"
+  },
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT"
+  ],
+  "initial_equity": 10000.0,
+  "risk_rules": "live (drawdown halt 8%, loss-streak pause ON)",
+  "costs": {
+    "maker_fee": 0.0002,
+    "taker_fee": 0.0005,
+    "slippage_bps": 2.0,
+    "multiplier": 1.0
+  },
+  "one_shot": true,
+  "candidates": [
+    {
+      "sub_bot": "trend_pullback",
+      "timeframe": "4h",
+      "params": {
+        "enabled": true,
+        "stop_atr": 2.0,
+        "trail_atr": 3.0,
+        "time_exit_bars": 480
+      },
+      "min_trades": 36,
+      "expected_trades_per_year_2020_2025": 73,
+      "config_hash": "ae3192e9a0d7"
+    },
+    {
+      "sub_bot": "funding_momentum",
+      "timeframe": "1h",
+      "params": {
+        "enabled": true,
+        "funding_baseline": 0.0001,
+        "stop_atr": 3.0,
+        "time_exit_bars": 96
+      },
+      "min_trades": 52,
+      "expected_trades_per_year_2020_2025": 103,
+      "config_hash": "ed8b74799c20"
+    },
+    {
+      "sub_bot": "vol_breakout",
+      "timeframe": "4h",
+      "params": {
+        "enabled": true,
+        "squeeze_pct": 0.2,
+        "vol_mult": 1.5,
+        "stop_atr": 1.5,
+        "trail_atr": 2.5,
+        "time_exit_bars": 192
+      },
+      "min_trades": 9,
+      "expected_trades_per_year_2020_2025": 18,
+      "config_hash": "ae3192e9a0d7"
+    }
+  ],
+  "pass_rule": "A candidate PASSES only if every criterion holds. Anything else = FAIL, shelved, no re-tuning against the holdout.",
+  "criteria": {
+    "min_trades": "per candidate (half its 2020-2025 annual rate)",
+    "net_return_gt": 0.0,
+    "profit_factor_gte": 1.1,
+    "profit_factor_2x_costs_gte": 1.0,
+    "not_halted": true
+  },
+  "reported_not_scored": [
+    "sharpe",
+    "max_drawdown",
+    "win_rate",
+    "avg_r",
+    "research-mode (no halt) results"
+  ],
+  "interpretation": {
+    "pass": "candidate for Phase 5 paper trading, after the 2020-2025 robustness checks",
+    "vol_breakout_pass": "~18 trades/yr: a pass means it survived, with low statistical confidence",
+    "fail": "shelved"
+  }
+}
