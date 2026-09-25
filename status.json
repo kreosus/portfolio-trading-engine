@@ -1,0 +1,64 @@
+{
+  "updated_at": "2026-09-25T18:22+00:00",
+  "data_through": "2026-09-25 00:00:00+00:00",
+  "funding_estimated_since": "2026-09-01 08:00:00+00:00",
+  "coverage": {
+    "BTCUSDT": {
+      "klines_from_daily": [
+        "2026-09"
+      ],
+      "funding_estimated_months": [
+        "2026-09"
+      ]
+    },
+    "ETHUSDT": {
+      "klines_from_daily": [
+        "2026-09"
+      ],
+      "funding_estimated_months": [
+        "2026-09"
+      ]
+    }
+  },
+  "entries": [
+    {
+      "id": "trend_pullback_4h",
+      "sub_bot": "trend_pullback",
+      "timeframe": "4h",
+      "scoring_start": "2026-09-01",
+      "closed_trades": 7,
+      "open_positions": 0,
+      "return": 0.0017969117717695493,
+      "profit_factor": 1.0710828815488205,
+      "max_drawdown": 0.02697334091861814,
+      "avg_r": 0.06454190653879126,
+      "halted_at": null
+    },
+    {
+      "id": "funding_momentum_1h",
+      "sub_bot": "funding_momentum",
+      "timeframe": "1h",
+      "scoring_start": "2026-09-01",
+      "closed_trades": 17,
+      "open_positions": 2,
+      "return": -0.02480300577809047,
+      "profit_factor": 0.5260994776510495,
+      "max_drawdown": 0.03975163652019165,
+      "avg_r": -0.21807076969674122,
+      "halted_at": null
+    },
+    {
+      "id": "vol_breakout_4h",
+      "sub_bot": "vol_breakout",
+      "timeframe": "4h",
+      "scoring_start": "2026-09-01",
+      "closed_trades": 0,
+      "open_positions": 0,
+      "return": 0.0,
+      "profit_factor": 0.0,
+      "max_drawdown": 0.0,
+      "avg_r": 0.0,
+      "halted_at": null
+    }
+  ]
+}
