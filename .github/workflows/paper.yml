@@ -53,6 +53,21 @@ jobs:
             cd paper-results && git checkout --orphan paper-results && git rm -rq --cached . && git clean -fdq
           fi
 
+      - name: Archive results of a retired registry
+        run: |
+          cd paper-results
+          NEW=$(python -c "import json;print(json.load(open('../paper/PAPER.json'))['id'])")
+          if [ -f README.md ] && ! grep -q "($NEW)" README.md; then
+            OLD=$(sed -n 's/^# Paper trading (\(.*\))$/\1/p' README.md)
+            [ "$OLD" = "paper-2026-09" ] && OLD="paper-2026-09-btc-eth"
+            mkdir -p "archive/$OLD"
+            for f in README.md status.json history.csv */; do
+              case "$f" in archive/) continue;; esac
+              [ -e "$f" ] && git mv "$f" "archive/$OLD/"
+            done
+            echo "Archived previous results to archive/$OLD"
+          fi
+
       - name: Update paper trading
         run: pte paper update --registry paper/PAPER.json --raw data/forward_raw --out paper-results
 

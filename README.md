@@ -2,7 +2,10 @@
 
 Research-first systematic trading engine. **Phase 1** answers one question:
 
-> Does the M15 SMC setup have positive expectancy on BTC and ETH perpetuals after fees, slippage and funding?
+> Does the M15 SMC setup have positive expectancy on the BTCUSDT perpetual after fees, slippage and funding?
+
+**Bitcoin only.** Since 2026-09-25 the system trades BTCUSDT only (`data.symbols` in the config).
+Research notes dated before that used BTCUSDT + ETHUSDT and say so.
 
 Everything here is built to make that answer honest: causal features, conservative fills, realistic costs,
 walk-forward validation, a locked holdout, and kill criteria fixed before any result is seen.
@@ -14,7 +17,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 pytest                               # 47 tests, including look-ahead checks
 
-pte download                         # Binance USD-M archives -> data/raw (BTCUSDT, ETHUSDT, 15m + funding)
+pte download                         # Binance USD-M archives -> data/raw (BTCUSDT 15m + funding)
 pte process                          # raw zips -> data/processed/*.parquet
 pte backtest                         # single run on development data (holdout excluded)
 pte walkforward                      # walk-forward + kill-criteria verdict -> reports/
@@ -31,6 +34,7 @@ pte paper update                     # forward paper trading (normally run daily
 ## Paper trading
 
 `paper/PAPER.json` registers which sub-bots are paper-traded forward, from when, and the review bar.
+The current registry is Bitcoin only (`paper-btc-2026-09-26`); the earlier BTC + ETH one is in `paper/archive/`.
 A GitHub Actions workflow (`.github/workflows/paper.yml`) runs daily: it downloads new archive data
 from data.binance.vision, re-runs every entry with the same engine as the backtests, and commits
 the results to the **`paper-results`** branch (`README.md` there is the scoreboard).

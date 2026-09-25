@@ -77,7 +77,7 @@ def write_report(reg, results, bars15, fund, info, out_dir) -> dict:
     est_since = [f[f.estimated].index.min() for f in fund.values() if "estimated" in f and f.estimated.any()]
     est_since = min(est_since) if est_since else None
     now = datetime.now(timezone.utc).isoformat(timespec="minutes")
-    rows, status = [], {"updated_at": now, "data_through": str(last_bar + pd.Timedelta("15min")),
+    rows, status = [], {"registry": reg["id"], "updated_at": now, "data_through": str(last_bar + pd.Timedelta("15min")),
                         "funding_estimated_since": str(est_since) if est_since is not None else None,
                         "coverage": info, "entries": []}
     for r in results:
@@ -100,7 +100,7 @@ def write_report(reg, results, bars15, fund, info, out_dir) -> dict:
     df.to_csv(hist, mode="a", header=not hist.exists(), index=False)
     lines = [f"# Paper trading ({reg['id']})", "",
              f"Updated {now} UTC. Market data through {status['data_through']} UTC.",
-             "Live risk rules, $10,000 per sub-bot, BTCUSDT + ETHUSDT perpetuals, same engine as the backtests.",
+             f"Live risk rules, $10,000 per sub-bot, {' + '.join(reg['symbols'])} perpetual, same engine as the backtests.",
              ""]
     if est_since is not None:
         lines += [f"**Provisional:** funding since {est_since} is estimated from the premium index until Binance "

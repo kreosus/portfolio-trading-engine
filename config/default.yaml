@@ -1,7 +1,7 @@
 # Phase 1 defaults. These are fixed BEFORE testing. Do not tune risk values for returns.
 
 data:
-  symbols: [BTCUSDT, ETHUSDT]
+  symbols: [BTCUSDT]        # Bitcoin only (since 2026-09-25; earlier research used BTCUSDT + ETHUSDT)
   interval: 15m
   start: "2020-01"          # first month to download (YYYY-MM)
   raw_dir: data/raw
