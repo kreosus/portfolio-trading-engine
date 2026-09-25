@@ -1,0 +1,108 @@
+{
+  "prereg": "2026-09-25-holdout-bots",
+  "opened_at": "2026-09-25T18:04:56.562945+00:00",
+  "results": [
+    {
+      "sub_bot": "trend_pullback",
+      "timeframe": "4h",
+      "verdict": "FAIL",
+      "checks": {
+        "trades >= 36": true,
+        "net return > 0": false,
+        "profit factor >= 1.1": false,
+        "PF at 2x costs >= 1.0": false,
+        "not halted": true
+      },
+      "live": {
+        "trades": 65,
+        "total_return": -0.020708777618721252,
+        "sharpe": -0.39414806620716986,
+        "profit_factor": 0.8280306120274324,
+        "max_drawdown": 0.07933704692886101,
+        "win_rate": 0.2153846153846154,
+        "avg_r": -0.31595624691722374,
+        "profit_factor_2x_costs": 0.7973322269355667,
+        "halted_at": "None"
+      },
+      "research": {
+        "trades": 81,
+        "total_return": -0.0052410969125566975,
+        "sharpe": -0.046733953052908304,
+        "profit_factor": 0.968127434492416,
+        "max_drawdown": 0.06865847998025443,
+        "win_rate": 0.2716049382716049,
+        "avg_r": -0.11397054337615693,
+        "profit_factor_2x_costs": 0.8509061013707455,
+        "halted_at": "None"
+      }
+    },
+    {
+      "sub_bot": "funding_momentum",
+      "timeframe": "1h",
+      "verdict": "FAIL",
+      "checks": {
+        "trades >= 52": true,
+        "net return > 0": false,
+        "profit factor >= 1.1": false,
+        "PF at 2x costs >= 1.0": false,
+        "not halted": false
+      },
+      "live": {
+        "trades": 69,
+        "total_return": -0.0476483678811741,
+        "sharpe": -0.779471253739876,
+        "profit_factor": 0.650832960281696,
+        "max_drawdown": 0.08205342515034142,
+        "win_rate": 0.2463768115942029,
+        "avg_r": -0.3418131098416652,
+        "profit_factor_2x_costs": 0.6305799794880846,
+        "halted_at": "2026-03-08 17:00:00+00:00"
+      },
+      "research": {
+        "trades": 167,
+        "total_return": -0.027339299062003386,
+        "sharpe": -0.3015079995895869,
+        "profit_factor": 0.8803867052460915,
+        "max_drawdown": 0.0921625805582903,
+        "win_rate": 0.30538922155688625,
+        "avg_r": -0.062415757465545174,
+        "profit_factor_2x_costs": 0.8141200601594436,
+        "halted_at": "None"
+      }
+    },
+    {
+      "sub_bot": "vol_breakout",
+      "timeframe": "4h",
+      "verdict": "FAIL",
+      "checks": {
+        "trades >= 9": true,
+        "net return > 0": false,
+        "profit factor >= 1.1": false,
+        "PF at 2x costs >= 1.0": false,
+        "not halted": true
+      },
+      "live": {
+        "trades": 24,
+        "total_return": -0.00044366845126864174,
+        "sharpe": 0.016420483467074,
+        "profit_factor": 0.9937805610638226,
+        "max_drawdown": 0.056617629374401734,
+        "win_rate": 0.20833333333333334,
+        "avg_r": 0.0883876727661383,
+        "profit_factor_2x_costs": 0.9171825119621969,
+        "halted_at": "None"
+      },
+      "research": {
+        "trades": 25,
+        "total_return": 0.03157850439328147,
+        "sharpe": 0.5369400656962109,
+        "profit_factor": 1.4225309069537069,
+        "max_drawdown": 0.05675270541042099,
+        "win_rate": 0.24,
+        "avg_r": 0.3269004693784414,
+        "profit_factor_2x_costs": 1.0067511647382241,
+        "halted_at": "None"
+      }
+    }
+  ]
+}

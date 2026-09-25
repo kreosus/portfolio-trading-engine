@@ -209,6 +209,24 @@ def cmd_holdout_bots(cfg, a):
                                                        verdicts={r["sub_bot"]: r["verdict"] for r in results})
 
 
+def cmd_robustness(cfg, a):
+    from .research.robustness import random_entry_baseline, robustness
+    bars, funding = _load(cfg)
+    start = pd.Timestamp(cfg["bots"]["report_start"], tz="UTC")
+    r = robustness(bars, funding, cfg, a.sub_bot, a.timeframe, start)
+    print(f"{a.sub_bot} on {a.timeframe}, 2020-2025 development data, research mode\n")
+    print(r["neighbourhood"].to_string(float_format=lambda v: f"{v:.2f}"))
+    print("\nby year:", "  ".join(f"{y}: {v:+.1%}" for y, v in r["yearly"].items()))
+    print(r["splits"].round(2).to_string())
+    s = r["stats"]
+    print(f"\nmean R {s['mean_r']:+.3f}, bootstrap 95% CI {s['mean_r_ci95'][0]:+.3f}..{s['mean_r_ci95'][1]:+.3f}, "
+          f"P(mean<=0) {s['p_mean_le_0']:.3f} (uncorrected for configurations tried)")
+    b = random_entry_baseline(bars, funding, cfg, a.sub_bot, a.timeframe, start, n_seeds=a.seeds)
+    print(f"random entries, same exits: median mean R {b['random_mean_r_median']:+.3f} "
+          f"(5-95%: {b['random_mean_r_p5_p95'][0]:+.3f}..{b['random_mean_r_p5_p95'][1]:+.3f}); "
+          f"random >= real in {b['share_random_ge_real']:.0%} of {b['n_seeds']} runs")
+
+
 def cmd_holdout(cfg, a):
     if HOLDOUT_LOCK.exists() and not a.force:
         print("Holdout already opened:", HOLDOUT_LOCK.read_text())
@@ -252,6 +270,10 @@ def main(argv=None):
                    help="bar size; parameters are in bars, so 1h/4h span 4x/16x the time")
     b.add_argument("--research-mode", action="store_true",
                    help="turn off drawdown halt and loss-streak pause to measure the full-window edge")
+    rb = sub.add_parser("robustness", help="settings neighbourhood, splits, bootstrap and random-entry baseline")
+    rb.add_argument("--sub-bot", required=True, choices=["trend_pullback", "vol_breakout", "vwap_reversion", "funding_momentum"])
+    rb.add_argument("--timeframe", choices=["15m", "1h", "4h"], default="4h")
+    rb.add_argument("--seeds", type=int, default=40)
     hb = sub.add_parser("holdout-bots", help="one-shot holdout test of pre-registered sub-bots")
     hb.add_argument("--prereg", default="research/2026-09-25-holdout-bots.json")
     hb.add_argument("--confirm", action="store_true")
@@ -261,7 +283,7 @@ def main(argv=None):
     logging.basicConfig(level=logging.INFO if a.verbose else logging.WARNING, format="%(levelname)s %(message)s")
     cfg = load_config(a.config)
     {"download": cmd_download, "process": cmd_process, "backtest": cmd_backtest,
-     "walkforward": cmd_walkforward, "bots": cmd_bots, "holdout-bots": cmd_holdout_bots, "holdout": cmd_holdout}[a.cmd](cfg, a)
+     "walkforward": cmd_walkforward, "bots": cmd_bots, "holdout-bots": cmd_holdout_bots, "robustness": cmd_robustness, "holdout": cmd_holdout}[a.cmd](cfg, a)
 
 
 if __name__ == "__main__":

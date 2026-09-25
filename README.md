@@ -23,6 +23,7 @@ pte bots --timeframe 4h              # same rules on 1h or 4h bars (params are i
 pte bots --research-mode             # measurement only: drawdown halt and loss-streak pause off
 pte holdout --confirm                # opens the locked holdout ONCE, at the end of Phase 1
 pte holdout-bots --confirm           # one-shot holdout test of the sub-bots pre-registered in research/
+pte robustness --sub-bot vol_breakout --timeframe 4h   # settings plateau, splits, bootstrap, random-entry baseline
 ```
 
 ## Sub-bots
