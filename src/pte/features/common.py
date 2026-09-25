@@ -37,5 +37,8 @@ def build_common(df: pd.DataFrame, funding: pd.DataFrame | None = None, atr_peri
     out["bbw"] = bbw
     out["bbw_pct"] = bbw.rolling(2880, min_periods=720).rank(pct=True)
     out["roc288"] = c / c.shift(288) - 1                        # 3-day return
+    # 200-day simple moving average by clock time (same meaning on any bar size); NaN until 200 days exist
+    bars_per_200d = int(pd.Timedelta("200D") / bar_delta(df.index))
+    out["sma200d"] = c.rolling("200D").mean().where(c.expanding().count() >= bars_per_200d)
     out["funding_rate"] = funding_on_bars(df, funding)
     return out

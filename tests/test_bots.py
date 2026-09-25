@@ -131,3 +131,22 @@ def test_funding_settlement_bars_on_4h():
     ct = f.index + pd.Timedelta("4h")
     settle = (ct.hour % 8 == 0)
     assert settle.sum() == 6          # 12 bars over 2 days -> closes at 08,16,00 each day
+
+
+def test_direction_filter_and_sma200d_causal():
+    from pte.data.store import resample_bars
+    from pte.strategies.library import apply_direction_filter
+    b = resample_bars(make_bars(4 * 24 * 320, seed=12), "1h")      # ~320 days of hourly bars
+    f_full = build_features_all({"X": b}, {}, CFG)["X"]
+    cut = int(len(b) * 0.8)
+    f_part = build_features_all({"X": b.iloc[:cut]}, {}, CFG)["X"]
+    assert np.allclose(f_full.sma200d.iloc[:cut], f_part.sma200d, equal_nan=True)
+    assert f_full.sma200d.iloc[: 24 * 199].isna().all() and f_full.sma200d.iloc[-1] > 0
+    mk = lambda i, side: OrderIntent(i, side, 1.0, 1.0 - side, side * math.inf, i + 1, 10, entry_type="market")
+    i = len(b) - 1
+    up = f_full.close.iloc[i] > f_full.sma200d.iloc[i]
+    its = [mk(i, 1), mk(i, -1), mk(5, 1)]                            # bar 5: no 200-day average yet -> dropped
+    kept = apply_direction_filter(its, f_full, "trend")
+    assert [x.side for x in kept] == ([1] if up else [-1])
+    assert all(x.side == 1 for x in apply_direction_filter(its, f_full, "long_only"))
+    assert apply_direction_filter(its, f_full, None) == its

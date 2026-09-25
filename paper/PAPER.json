@@ -38,6 +38,16 @@
       "entry_hash": "d5496e960fd9",
       "status_at_registration": "shelved after failing the 2025-09..2026-08 holdout; paper-traded as a forward control",
       "expected_trades_per_year_2020_2025": 18
+    },
+    {
+      "id": "trend_pullback_trendfilter_4h",
+      "sub_bot": "trend_pullback_trendfilter",
+      "timeframe": "4h",
+      "registered": "2026-09-25",
+      "scoring_start": "2026-09-26",
+      "entry_hash": "a10eef834d39",
+      "status_at_registration": "best of 6 direction-filter variants explored on 2020-2025 (PF 1.52 vs 1.37 unfiltered); selected after the holdout was used, so only forward data can judge it",
+      "expected_trades_per_year_2020_2025": 68
     }
   ],
   "review": {

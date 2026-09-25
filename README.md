@@ -12,7 +12,7 @@ walk-forward validation, a locked holdout, and kill criteria fixed before any re
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                               # 43 tests, including look-ahead checks
+pytest                               # 47 tests, including look-ahead checks
 
 pte download                         # Binance USD-M archives -> data/raw (BTCUSDT, ETHUSDT, 15m + funding)
 pte process                          # raw zips -> data/processed/*.parquet
@@ -24,6 +24,8 @@ pte bots --research-mode             # measurement only: drawdown halt and loss-
 pte holdout --confirm                # opens the locked holdout ONCE, at the end of Phase 1
 pte holdout-bots --confirm           # one-shot holdout test of the sub-bots pre-registered in research/
 pte robustness --sub-bot vol_breakout --timeframe 4h   # settings plateau, splits, bootstrap, random-entry baseline
+pte direction --sub-bot trend_pullback --timeframe 4h  # 200-day direction filter vs none
+pte paper update                     # forward paper trading (normally run daily by GitHub Actions)
 ```
 
 ## Paper trading

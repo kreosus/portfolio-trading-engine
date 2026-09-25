@@ -13,7 +13,7 @@ from .config import with_overrides
 from .features.common import build_common
 from .features.indicators import elevated_vol
 from .features.smc import build_features
-from .strategies.library import REGISTRY
+from .strategies.library import REGISTRY, apply_direction_filter
 from .strategies.smc_m15 import generate_signals
 
 
@@ -36,7 +36,8 @@ def build_sleeves(feats: dict, cfg: dict) -> list[SleeveSpec]:
         if name == "smc":
             intents = {s: generate_signals(f, cfg["strategy"]) for s, f in feats.items()}
         else:
-            intents = {s: REGISTRY[name](f, sc) for s, f in feats.items()}
+            fn = REGISTRY[sc.get("base", name)]
+            intents = {s: apply_direction_filter(fn(f, sc), f, sc.get("direction_filter")) for s, f in feats.items()}
         specs.append(SleeveSpec(name, intents, 1.0))   # full capital each
     return specs
 

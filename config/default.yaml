@@ -95,3 +95,10 @@ bots:
       funding_baseline: 0.0001
       stop_atr: 3.0
       time_exit_bars: 96
+    trend_pullback_trendfilter:
+      enabled: false            # paper-traded only (registered 2026-09-25); not part of the default `pte bots` run
+      base: trend_pullback
+      direction_filter: trend   # longs only above the 200-day average, shorts only below
+      stop_atr: 2.0
+      trail_atr: 3.0
+      time_exit_bars: 480

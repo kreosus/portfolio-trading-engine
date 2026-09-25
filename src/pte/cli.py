@@ -235,6 +235,16 @@ def cmd_paper(cfg, a):
         print("(funding estimated since", st["funding_estimated_since"], ")")
 
 
+def cmd_direction(cfg, a):
+    from .research.direction import direction_study
+    bars, funding = _load(cfg)
+    start = pd.Timestamp(cfg["bots"]["report_start"], tz="UTC")
+    d = direction_study(bars, funding, cfg, a.sub_bot, a.timeframe, start, n_seeds=a.seeds)
+    print(f"{a.sub_bot} on {a.timeframe}: direction filter vs none (2020-2025, research mode, exploratory)\n")
+    with pd.option_context("display.width", 200, "display.max_columns", 20):
+        print(d.to_string(float_format=lambda v: f"{v:.2f}"))
+
+
 def cmd_holdout(cfg, a):
     if HOLDOUT_LOCK.exists() and not a.force:
         print("Holdout already opened:", HOLDOUT_LOCK.read_text())
@@ -282,6 +292,10 @@ def main(argv=None):
     rb.add_argument("--sub-bot", required=True, choices=["trend_pullback", "vol_breakout", "vwap_reversion", "funding_momentum"])
     rb.add_argument("--timeframe", choices=["15m", "1h", "4h"], default="4h")
     rb.add_argument("--seeds", type=int, default=40)
+    dr = sub.add_parser("direction", help="200-day direction filter study for one sub-bot")
+    dr.add_argument("--sub-bot", required=True, choices=["trend_pullback", "vol_breakout", "vwap_reversion", "funding_momentum"])
+    dr.add_argument("--timeframe", choices=["15m", "1h", "4h"], default="4h")
+    dr.add_argument("--seeds", type=int, default=30)
     pp = sub.add_parser("paper", help="update forward paper trading from the registry")
     pp.add_argument("action", choices=["update"])
     pp.add_argument("--registry", default="paper/PAPER.json")
@@ -296,7 +310,7 @@ def main(argv=None):
     logging.basicConfig(level=logging.INFO if a.verbose else logging.WARNING, format="%(levelname)s %(message)s")
     cfg = load_config(a.config)
     {"download": cmd_download, "process": cmd_process, "backtest": cmd_backtest,
-     "walkforward": cmd_walkforward, "bots": cmd_bots, "holdout-bots": cmd_holdout_bots, "robustness": cmd_robustness, "paper": cmd_paper, "holdout": cmd_holdout}[a.cmd](cfg, a)
+     "walkforward": cmd_walkforward, "bots": cmd_bots, "holdout-bots": cmd_holdout_bots, "robustness": cmd_robustness, "paper": cmd_paper, "direction": cmd_direction, "holdout": cmd_holdout}[a.cmd](cfg, a)
 
 
 if __name__ == "__main__":

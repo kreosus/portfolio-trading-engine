@@ -115,3 +115,26 @@ REGISTRY = {
     "vwap_reversion": vwap_reversion,
     "funding_momentum": funding_momentum,
 }
+
+
+def apply_direction_filter(intents: list[OrderIntent], f: pd.DataFrame, mode: str | None) -> list[OrderIntent]:
+    """Keep only trades that agree with the 200-day trend at the signal bar.
+
+    mode "trend":     longs only above the 200-day average, shorts only below it.
+    mode "long_only": longs only above the 200-day average; no shorts at all.
+    None / "none":    unchanged.
+    """
+    if not mode or mode == "none":
+        return intents
+    c = f["close"].to_numpy(); sma = f["sma200d"].to_numpy()
+    out = []
+    for it in intents:
+        i = it.signal_idx
+        if np.isnan(sma[i]):
+            continue
+        up = c[i] > sma[i]
+        if it.side == 1 and up:
+            out.append(it)
+        elif it.side == -1 and not up and mode == "trend":
+            out.append(it)
+    return out
