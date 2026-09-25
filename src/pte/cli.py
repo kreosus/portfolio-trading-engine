@@ -13,7 +13,7 @@ import pandas as pd
 from .backtest.metrics import summarize
 from .config import load_config, with_overrides
 from .data import binance
-from .data.store import load_bars, load_funding, split_holdout
+from .data.store import HTF_FOR, load_bars, load_funding, resample_bars, split_holdout
 from .data.synthetic import make_bars, make_funding
 from .pipeline import backtest
 from .research.walkforward import ExperimentLog, kill_check, walk_forward
@@ -101,12 +101,20 @@ def cmd_walkforward(cfg, a):
 def cmd_bots(cfg, a):
     from .bots import bot_report
     bars, funding = _synthetic(cfg, a.synthetic) if a.synthetic else _load(cfg)
+    tf = a.timeframe
+    bars = {s: resample_bars(df, tf) for s, df in bars.items()}
+    cfg = with_overrides(cfg, {"smc.htf_rule": HTF_FOR[tf]})
+    if a.research_mode:
+        # measurement only: let each sub-bot trade the whole window instead of stopping at its drawdown halt
+        cfg = with_overrides(cfg, {"risk.drawdown_halt": 1.0, "risk.max_consecutive_losses": 10**9})
+    tag = f"{tf}{'_research' if a.research_mode else ''}"
     start = None if a.synthetic else pd.Timestamp(cfg["bots"]["report_start"], tz="UTC")
     rep = bot_report(bars, funding, cfg, start=start)
     t = rep["sleeves"]
     first = min(df.index[0] for df in bars.values()) if start is None else start
     last = min(df.index[-1] for df in bars.values())
-    print(f"Sub-bots, each trading the full ${cfg['risk']['initial_equity']:,.0f} independently")
+    print(f"Sub-bots on {tf} bars, each trading the full ${cfg['risk']['initial_equity']:,.0f} independently"
+          + (" [research mode: drawdown halt and loss-streak pause off]" if a.research_mode else ""))
     print(f"Window: {first.date()} .. {last.date()} ({'SYNTHETIC' if a.synthetic else 'real'} data, holdout excluded)\n")
     fmt = t.copy()
     for col in ("return", "max_dd", "win_rate", "profitable_halves"):
@@ -119,14 +127,14 @@ def cmd_bots(cfg, a):
         print("\nDaily-return correlation between sub-bots:")
         print(rep["correlation"].round(2).to_string())
     REPORTS.mkdir(exist_ok=True)
-    t.to_csv(REPORTS / "bots_summary.csv")
-    rep["correlation"].to_csv(REPORTS / "bots_correlation.csv")
+    t.to_csv(REPORTS / f"bots_{tag}_summary.csv")
+    rep["correlation"].to_csv(REPORTS / f"bots_{tag}_correlation.csv")
     for name, r in rep["result"].sleeves.items():
-        r.trades.to_csv(REPORTS / f"bots_{name}_trades.csv", index=False)
-        r.equity.resample("1D").last().to_csv(REPORTS / f"bots_{name}_equity_daily.csv")
+        r.trades.to_csv(REPORTS / f"bots_{tag}_{name}_trades.csv", index=False)
+        r.equity.resample("1D").last().to_csv(REPORTS / f"bots_{tag}_{name}_equity_daily.csv")
     log = ExperimentLog(REPORTS / ("experiments_synthetic.jsonl" if a.synthetic else "experiments.jsonl"))
     for name, row in t.iterrows():
-        log.write(kind="bot_sleeve", sleeve=name, trades=int(row.trades), sharpe=float(row.sharpe),
+        log.write(kind="bot_sleeve", sleeve=name, timeframe=tf, research_mode=bool(a.research_mode), trades=int(row.trades), sharpe=float(row.sharpe),
                   profit_factor=float(row.pf), start=first, end=last)
 
 
@@ -169,6 +177,10 @@ def main(argv=None):
                        help="run on N synthetic bars instead of real data (pipeline check only)")
     b = sub.add_parser("bots", help="run all five sub-bots, each on the full account, and report separately")
     b.add_argument("--synthetic", type=int, default=0, metavar="N_BARS")
+    b.add_argument("--timeframe", choices=["15m", "1h", "4h"], default="15m",
+                   help="bar size; parameters are in bars, so 1h/4h span 4x/16x the time")
+    b.add_argument("--research-mode", action="store_true",
+                   help="turn off drawdown halt and loss-streak pause to measure the full-window edge")
     h = sub.add_parser("holdout", help="open the locked holdout once")
     h.add_argument("--confirm", action="store_true"); h.add_argument("--force", action="store_true")
     a = p.parse_args(argv)

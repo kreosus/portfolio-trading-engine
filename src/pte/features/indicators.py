@@ -5,6 +5,13 @@ from __future__ import annotations
 import pandas as pd
 
 
+def bar_delta(index: pd.DatetimeIndex) -> pd.Timedelta:
+    """Bar length, inferred as the most common spacing of the first bars."""
+    if len(index) < 2:
+        return pd.Timedelta("15min")
+    return pd.Series(index[:1000]).diff().dropna().mode().iloc[0]
+
+
 def atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     prev_close = df["close"].shift(1)
     tr = pd.concat([

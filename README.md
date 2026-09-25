@@ -12,13 +12,15 @@ walk-forward validation, a locked holdout, and kill criteria fixed before any re
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                               # 39 tests, including look-ahead checks
+pytest                               # 43 tests, including look-ahead checks
 
 pte download                         # Binance USD-M archives -> data/raw (BTCUSDT, ETHUSDT, 15m + funding)
 pte process                          # raw zips -> data/processed/*.parquet
 pte backtest                         # single run on development data (holdout excluded)
 pte walkforward                      # walk-forward + kill-criteria verdict -> reports/
 pte bots                             # all five sub-bots, each on the full account, reported separately
+pte bots --timeframe 4h              # same rules on 1h or 4h bars (params are in bars: 4x / 16x the time)
+pte bots --research-mode             # measurement only: drawdown halt and loss-streak pause off
 pte holdout --confirm                # opens the locked holdout ONCE, at the end of Phase 1
 ```
 

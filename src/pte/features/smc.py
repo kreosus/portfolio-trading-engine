@@ -23,7 +23,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .indicators import atr as atr_fn
+from .indicators import atr as atr_fn, bar_delta
 
 
 def swings(high: np.ndarray, low: np.ndarray, n: int) -> tuple[np.ndarray, np.ndarray]:
@@ -166,7 +166,7 @@ def htf_bias(df: pd.DataFrame, rule: str, n: int) -> pd.Series:
     A HTF bar covering [t, t+rule) is known only once the base bar ending at
     t+rule has closed. Incomplete HTF bars (e.g. at a data gap) are dropped.
     """
-    base = pd.Timedelta(df.index.freq or pd.infer_freq(df.index[:100]) or "15min")
+    base = bar_delta(df.index)
     agg = df.resample(rule, label="left", closed="left").agg(
         {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
     counts = df["close"].resample(rule, label="left", closed="left").count()

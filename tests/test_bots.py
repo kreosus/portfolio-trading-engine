@@ -27,7 +27,7 @@ def bars():
 def test_common_features_are_causal(bars, cut):
     fu = make_funding(bars)
     full = build_common(bars, fu)
-    part = build_common(bars.iloc[:cut], fu[fu.index < bars.index[cut]])
+    part = build_common(bars.iloc[:cut], fu[fu.index <= bars.index[cut]])
     for col in part.columns:
         assert np.allclose(full[col].iloc[:cut].to_numpy(), part[col].to_numpy(), equal_nan=True), col
 
@@ -37,7 +37,7 @@ def test_library_signals_are_causal(bars, name):
     fu = {"X": make_funding(bars)}
     cut = 4200
     f_full = build_features_all({"X": bars}, fu, CFG)["X"]
-    fu_cut = {"X": fu["X"][fu["X"].index < bars.index[cut]]}
+    fu_cut = {"X": fu["X"][fu["X"].index <= bars.index[cut]]}
     f_part = build_features_all({"X": bars.iloc[:cut]}, fu_cut, CFG)["X"]
     p = CFG["bots"]["sleeves"][name]
     full = [s for s in REGISTRY[name](f_full, p) if s.signal_idx < cut]
@@ -93,3 +93,41 @@ def test_sub_bots_are_independent(bars):
         assert a.initial_equity == RISK["initial_equity"]            # full account each
         assert np.allclose(a.equity.to_numpy(), b.equity.to_numpy())
         assert len(a.trades) == len(b.trades)
+
+
+def test_resample_keeps_only_complete_bars():
+    from pte.data.store import resample_bars
+    b = make_bars(4 * 10 + 3, start="2024-01-01")          # 10 full hours + 3 extra 15m bars
+    h = resample_bars(b, "1h")
+    assert len(h) == 10
+    first = b.iloc[:4]
+    assert h.iloc[0].open == first.open.iloc[0] and h.iloc[0].close == first.close.iloc[-1]
+    assert h.iloc[0].high == first.high.max() and h.iloc[0].low == first.low.min()
+
+
+@pytest.mark.parametrize("tf", ["1h", "4h"])
+def test_higher_timeframe_signals_are_causal(tf):
+    from pte.config import with_overrides
+    from pte.data.store import HTF_FOR, resample_bars
+    b15 = make_bars(4 * 16 * 400, seed=9)
+    b = resample_bars(b15, tf)
+    fu = make_funding(b15)
+    cfg = with_overrides(CFG, {"smc.htf_rule": HTF_FOR[tf]})
+    cut = int(len(b) * 0.7)
+    f_full = build_features_all({"X": b}, {"X": fu}, cfg)["X"]
+    f_part = build_features_all({"X": b.iloc[:cut]}, {"X": fu[fu.index <= b.index[cut]]}, cfg)["X"]
+    for name in REGISTRY:
+        p = cfg["bots"]["sleeves"][name]
+        assert [s for s in REGISTRY[name](f_full, p) if s.signal_idx < cut] == REGISTRY[name](f_part, p), name
+    from pte.strategies.smc_m15 import generate_signals
+    assert [s for s in generate_signals(f_full, cfg["strategy"]) if s.signal_idx < cut] == \
+        generate_signals(f_part, cfg["strategy"])
+
+
+def test_funding_settlement_bars_on_4h():
+    from pte.data.store import resample_bars
+    b = resample_bars(make_bars(4 * 4 * 12, start="2024-01-01"), "4h")
+    f = build_features_all({"X": b}, {}, CFG)["X"]
+    ct = f.index + pd.Timedelta("4h")
+    settle = (ct.hour % 8 == 0)
+    assert settle.sum() == 6          # 12 bars over 2 days -> closes at 08,16,00 each day

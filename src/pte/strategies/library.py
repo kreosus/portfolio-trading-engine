@@ -1,9 +1,10 @@
 """Strategies B–E. Each is independent, with rules fixed before testing.
 
-All signals fire on a closed bar and enter at the next bar's open (market),
+Parameters are in BARS, so the same rules on 1h or 4h bars span 4x or 16x the
+time. All signals fire on a closed bar and enter at the next bar's open (market),
 unless noted. Parameters live in config/default.yaml under `bots`.
 
-B trend_pullback   15m EMA200 > EMA800 (≈ 2-day > 8-day trend). Long when the
+B trend_pullback   EMA200 > EMA800 (on 15m bars ≈ 2-day > 8-day trend). Long when the
                    close reclaims EMA50 after the prior close was below it,
                    RSI > 50. Stop 2 ATR, trailing 3 ATR, time exit 5 days.
                    Short mirrors it.
@@ -27,6 +28,8 @@ import math
 
 import numpy as np
 import pandas as pd
+
+from ..features.indicators import bar_delta
 
 from .smc_m15 import OrderIntent
 
@@ -92,7 +95,7 @@ def funding_momentum(f: pd.DataFrame, p: dict) -> list[OrderIntent]:
     c = f["close"].to_numpy(); a = f["atr"].to_numpy()
     roc = f["roc288"].to_numpy(); fr = f["funding_rate"].to_numpy()
     # settlement bars: the bar whose close is the settlement time (xx:45 bar before 00/08/16 UTC)
-    ct = f.index + pd.Timedelta("15min")
+    ct = f.index + bar_delta(f.index)
     settle = ((ct.hour % 8 == 0) & (ct.minute == 0))
     base = p["funding_baseline"]
     out = []

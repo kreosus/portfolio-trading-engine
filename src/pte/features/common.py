@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .indicators import atr, ema, rsi, session_vwap
+from .indicators import atr, bar_delta, ema, rsi, session_vwap
 
 
 def funding_on_bars(df: pd.DataFrame, funding: pd.DataFrame | None) -> pd.Series:
     """Most recent SETTLED funding rate known at each bar's close (as-of join)."""
     if funding is None or funding.empty:
         return pd.Series(0.0, index=df.index, name="funding_rate")
-    close_time = pd.DataFrame({"t": df.index + pd.Timedelta("15min")})
+    close_time = pd.DataFrame({"t": df.index + bar_delta(df.index)})
     fr = funding["rate"].rename("funding_rate").reset_index().rename(columns={funding.index.name or "index": "ft"})
     fr.columns = ["ft", "funding_rate"]
     fr["ft"] = fr["ft"].astype("datetime64[ns, UTC]")
