@@ -17,6 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+live = ["matplotlib>=3.8"]
 
 [project.scripts]
 pte = "pte.cli:main"

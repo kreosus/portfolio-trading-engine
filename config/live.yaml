@@ -1,0 +1,110 @@
+# Confluence system (Master Build Specification, 2026-09-26). All tunables live here (spec §42).
+# STATUS: UNVALIDATED. The score threshold and weights below are placeholders until backtesting
+# and walk-forward validation set them (spec §19). Run in shadow mode only until then.
+
+strategy_version: "confluence-0.1.0"
+symbol: BTCUSDT
+
+mode: shadow                 # shadow = real data + real decision + simulated execution (spec §38)
+                             # demo   = Binance Futures demo environment (fake funds; needs eligible location)
+                             # live   = disabled in this build
+
+data:
+  source: coinbase           # coinbase (US-accessible public BTC-USD data) | binance | snapshot
+  m15_bars: 1000
+  h1_bars: 1200              # H4 is built from H1
+  stale_seconds: 180         # latest closed bar / quote older than this -> NO NEW TRADE
+  max_gap_bars: 2            # more missing bars than this in the recent window -> NO NEW TRADE
+
+timeframes:
+  context: 4h                # H4 major context
+  direction: 1h              # H1 directional confirmation
+  setup: 15m                 # M15 primary setup and execution
+
+structure:
+  swing_n: 3
+  htf_swing_n: 3
+
+liquidity:
+  eq_tolerance_atr: 0.10     # highs/lows within this many ATR count as equal (EQH/EQL)
+  sweep_lookback_bars: 20    # sweep must be this recent (M15 bars)
+  min_sweep_depth_atr: 0.05  # a mere touch is not a sweep (spec §8)
+
+displacement:
+  body_atr: 1.2
+  close_frac: 0.25
+  range_expansion: 1.5       # bar range vs 20-bar median range
+  volume_mult: 1.3           # bar volume vs 20-bar median volume
+
+poi:
+  fvg_min_atr: 0.10
+  max_age_bars: 24           # POI older than this is stale
+  entry_valid_bars: 8        # limit entry stays live this many M15 bars
+
+momentum:
+  rsi_period: 14
+  ema_fast: 50
+  ema_slow: 200
+
+sessions_utc:                # spec §15
+  asia: ["00:00", "08:00"]
+  london: ["07:00", "16:00"]
+  new_york: ["12:00", "21:00"]
+
+news:                        # spec §16-17, §41
+  provider: faireconomy      # weekly USD calendar feed; none -> NEWS_DATA_UNAVAILABLE
+  pre_event_minutes: 60      # PRE_EVENT: caution (score penalty)
+  restrict_minutes: 15       # no new high-risk entries
+  hard_block_minutes: 5      # EVENT_LOCK before release
+  post_lock_minutes: 15      # POST_EVENT_VOLATILITY
+  reassess_minutes: 60       # REASSESSMENT
+  unavailable_policy: block  # block | caution  (spec §41: never assume "no news")
+
+decision:
+  score_threshold: 60        # PLACEHOLDER (0-100); must be set by walk-forward validation
+  weights:                   # soft confirmations (spec §19); sum = 100
+    htf_alignment: 20
+    fvg_ob_overlap: 10
+    premium_discount: 10
+    volume: 10
+    vwap: 10
+    ema: 10
+    rsi: 10
+    session: 10
+    derivatives: 10          # funding/OI; scores neutral (half) when unavailable
+  min_rr: 2.0                # to TP2
+
+execution:
+  entry_type: limit          # limit at POI midpoint
+  max_spread_bps: 5
+  max_slippage_bps: 10
+  max_entry_drift_atr: 0.5   # entry validation: price moved too far from plan -> CANCEL SIGNAL
+  tp_split: [0.5, 0.3, 0.2]  # TP1 / TP2 / TP3 partials
+  breakeven_after_tp1: true
+
+risk:                        # spec §22, §32 (hard limits; strategy cannot override)
+  initial_equity: 10000.0    # shadow account
+  risk_per_trade: 0.005
+  max_leverage: 5.0
+  max_daily_loss: 0.02
+  max_weekly_loss: 0.04
+  max_drawdown: 0.08
+  max_open_positions: 1
+  min_liq_distance_x_stop: 2.0   # liquidation must be >= this many stop-distances away
+
+exchange_rules:              # used by the simulated exchange; real values come from exchangeInfo in demo mode
+  tick_size: 0.10
+  step_size: 0.001
+  min_qty: 0.001
+  min_notional: 100.0
+  maker_fee: 0.0002
+  taker_fee: 0.0005
+
+binance:
+  demo_base_url: https://demo-fapi.binance.com
+  api_key_env: BINANCE_DEMO_API_KEY
+  api_secret_env: BINANCE_DEMO_API_SECRET
+
+journal:
+  path: live/journal.sqlite
+  log_path: live/events.jsonl

@@ -245,6 +245,82 @@ def cmd_direction(cfg, a):
         print(d.to_string(float_format=lambda v: f"{v:.2f}"))
 
 
+def cmd_live(cfg, a):
+    """Confluence bot (Master Build Spec). Shadow mode: real data, simulated execution."""
+    import pandas as _pd
+    from .live.adapters import CoinbaseMarketData, SnapshotMarketData
+    from .live.bot import Bot, load_live_config
+    lc = load_live_config(a.live_config)
+    root = Path(a.root)
+    if a.action == "status":
+        bot = Bot(lc, root=root)
+        st = bot.st
+        print(f"mode {lc['mode']}  equity {st['equity']:.2f}  realized {st['realized']:+.2f}  "
+              f"position {'OPEN ' + st['position']['p']['side'] if st['position'] else 'FLAT'}  "
+              f"pending {'yes' if st['pending'] else 'no'}")
+        for t in bot.j.trades()[-10:]:
+            print(f"  #{t['id']} {t['direction']} {t['qty']} @ {t['entry']:.2f} -> {t['exit_reason'] or 'open'} "
+                  f"{(t['net_pnl'] or 0):+.2f} USD")
+        return
+    md = SnapshotMarketData(a.snapshot) if a.snapshot else CoinbaseMarketData()
+    m15 = md.candles("15m") if a.snapshot else md.candles("15m", lc["data"]["m15_bars"])
+    h1 = md.candles("1h") if a.snapshot else md.candles("1h", lc["data"]["h1_bars"])
+    quote, now = md.quote(), md.clock()
+    cal = md.calendar()
+    if cal is None and not a.snapshot:
+        cal = _fetch_calendar()
+    bot = Bot(lc, root=root)
+    print(f"data: {md.source}; {len(m15)} M15 / {len(h1)} H1 closed bars through {m15.index[-1] + _pd.Timedelta('15min')}"
+          f"; bid {quote['bid']:.2f} ask {quote['ask']:.2f}")
+    if a.action == "cycle":
+        r = bot.cycle(m15, h1, quote, now, md.derivatives(), cal)
+        _print_cycle(bot, r)
+    elif a.action == "close":
+        r = bot.close_now(quote, now, "manual close")
+        for e in r["events"]:
+            print(e)
+    elif a.action == "replay":
+        from .live.replay import replay
+        start = m15.index[-1] - _pd.Timedelta(hours=a.hours)
+        reps = replay(bot, m15, h1, start, calendar=cal, derivatives=md.derivatives())
+        from collections import Counter
+        print("\ncycles:", len(reps), dict(Counter(r["decision"] for r in reps)))
+    if a.charts:
+        from .live.charts import trade_chart
+        out = Path(a.charts); out.mkdir(parents=True, exist_ok=True)
+        for t in bot.j.trades():
+            cids = set(json.loads(t["order_ids"]).values())
+            fills = [f for f in bot.venue.fills if f["client_id"] in cids or
+                     (f["purpose"] == "close" and _pd.Timestamp(f["t"]) >= _pd.Timestamp(t["opened_at"]) and
+                      (t["closed_at"] is None or _pd.Timestamp(f["t"]) <= _pd.Timestamp(t["closed_at"])))]
+            print("chart:", trade_chart(m15, t, fills, str(out / f"trade_{t['id']:03d}.png")))
+
+
+def _print_cycle(bot, r):
+    ctx = bot.last_ctx
+    print(f"\n=== cycle {r['time']} ===")
+    print(f"HTF bias {ctx['htf_bias']} (H4 {ctx['h4_struct']['direction']}, H1 {ctx['h1_struct']['direction']}, "
+          f"M15 {ctx['m15_struct']['direction']}) | regime {'/'.join(ctx['regime']['labels'])} | "
+          f"session {ctx['session']} | news {ctx['news']['state']} | spread {ctx['spread_bps']:.2f} bps")
+    print(f"momentum: RSI {ctx['momentum']['rsi']}, EMA {ctx['momentum']['ema_state']}, "
+          f"{'above' if ctx['momentum']['above_vwap'] else 'below'} VWAP {ctx['momentum']['vwap']:.2f}")
+    print(f"liquidity levels tracked: {len(ctx['levels'])}; sweeps in window: {len(ctx['sweeps'])}")
+    print("decision:", r.get("explain", r.get("decision")))
+    for e in r["events"]:
+        print("event:", e)
+    print(f"shadow equity {r['equity']:.2f}")
+
+
+def _fetch_calendar():
+    import requests
+    try:
+        r = requests.get("https://nfs.faireconomy.media/ff_calendar_thisweek.json", timeout=10)
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        return None            # -> NEWS_DATA_UNAVAILABLE (spec §41), never "no news"
+
+
 def cmd_holdout(cfg, a):
     if HOLDOUT_LOCK.exists() and not a.force:
         print("Holdout already opened:", HOLDOUT_LOCK.read_text())
@@ -301,6 +377,13 @@ def main(argv=None):
     pp.add_argument("--registry", default="paper/PAPER.json")
     pp.add_argument("--raw", default="data/forward_raw")
     pp.add_argument("--out", default="paper-results")
+    lv = sub.add_parser("live", help="confluence bot (Master Build Spec): shadow cycle, replay, close, status")
+    lv.add_argument("action", choices=["cycle", "replay", "close", "status"])
+    lv.add_argument("--snapshot", help="JSON snapshot instead of fetching Coinbase directly")
+    lv.add_argument("--hours", type=int, default=72, help="replay window")
+    lv.add_argument("--root", default=".", help="where live/ journal + simulated exchange state live")
+    lv.add_argument("--live-config", default=None)
+    lv.add_argument("--charts", default=None, help="write a PNG per trade into this folder")
     hb = sub.add_parser("holdout-bots", help="one-shot holdout test of pre-registered sub-bots")
     hb.add_argument("--prereg", default="research/2026-09-25-holdout-bots.json")
     hb.add_argument("--confirm", action="store_true")
@@ -310,7 +393,7 @@ def main(argv=None):
     logging.basicConfig(level=logging.INFO if a.verbose else logging.WARNING, format="%(levelname)s %(message)s")
     cfg = load_config(a.config)
     {"download": cmd_download, "process": cmd_process, "backtest": cmd_backtest,
-     "walkforward": cmd_walkforward, "bots": cmd_bots, "holdout-bots": cmd_holdout_bots, "robustness": cmd_robustness, "paper": cmd_paper, "direction": cmd_direction, "holdout": cmd_holdout}[a.cmd](cfg, a)
+     "walkforward": cmd_walkforward, "bots": cmd_bots, "holdout-bots": cmd_holdout_bots, "robustness": cmd_robustness, "paper": cmd_paper, "live": cmd_live, "direction": cmd_direction, "holdout": cmd_holdout}[a.cmd](cfg, a)
 
 
 if __name__ == "__main__":

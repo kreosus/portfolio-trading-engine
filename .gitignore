@@ -7,3 +7,5 @@ __pycache__/
 /reports/*
 !/reports/.gitkeep
 /paper-results/
+/live/
+.DS_Store

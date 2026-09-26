@@ -15,7 +15,7 @@ walk-forward validation, a locked holdout, and kill criteria fixed before any re
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                               # 47 tests, including look-ahead checks
+pytest                               # 57 tests, including look-ahead checks
 
 pte download                         # Binance USD-M archives -> data/raw (BTCUSDT 15m + funding)
 pte process                          # raw zips -> data/processed/*.parquet
@@ -30,6 +30,31 @@ pte robustness --sub-bot vol_breakout --timeframe 4h   # settings plateau, split
 pte direction --sub-bot trend_pullback --timeframe 4h  # 200-day direction filter vs none
 pte paper update                     # forward paper trading (normally run daily by GitHub Actions)
 ```
+
+## Confluence bot (Master Build Specification)
+
+`src/pte/live/` implements the uploaded *Binance Futures Master Build Specification*: one confluence system,
+not competing bots. Modules: data-quality gate, structure (H4/H1/M15), liquidity (PDH/PDL, PWH/PWL, sessions,
+EQH/EQL, H1/M15 swings; a touch is not a sweep), displacement, POI (FVG/OB, freshness, mitigation, overlap),
+momentum, session/regime/derivatives context, news/event states, Master Decision Engine (hard requirements +
+weighted score), risk engine (5x hard cap, round-down sizing, liquidation distance, kill switches), execution
+engine (order state machine, reduce-only stop + TP1/TP2/TP3), position manager, SQLite trade journal and JSONL log.
+Settings: `config/live.yaml`.
+
+```bash
+pip install -e ".[dev,live]"
+pte live cycle                       # one shadow cycle on LIVE Coinbase BTC-USD data: full analysis + decision
+pte live cycle --charts reports/live # ...and a PNG per trade
+pte live replay --hours 72 --charts reports/live   # same bot bar-by-bar over recent real bars
+pte live status                      # shadow account, open position, recent trades
+pte live close                       # close the open shadow position at market
+```
+
+- **Shadow mode only** (spec §38): real prices and real decisions, simulated fills, no real order.
+- Binance's live *and* demo futures APIs refuse US locations, so this build reads Coinbase's public BTC-USD data
+  (spot: no funding/OI, which then score neutral). `BinanceFuturesAdapter` targets the demo environment only;
+  live-money mode is disabled.
+- **Unvalidated.** The score threshold and weights are placeholders until walk-forward testing sets them (spec §19).
 
 ## Paper trading
 
