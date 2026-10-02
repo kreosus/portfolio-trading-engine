@@ -1,12 +1,11 @@
 {
   "registry": "paper-btc-2026-09-26",
-  "updated_at": "2026-10-01T10:25+00:00",
-  "data_through": "2026-10-01 00:00:00+00:00",
-  "funding_estimated_since": null,
+  "updated_at": "2026-10-02T10:01+00:00",
+  "data_through": "2026-10-02 00:00:00+00:00",
+  "funding_estimated_since": "2026-10-01 08:00:00+00:00",
   "coverage": {
     "BTCUSDT": {
       "klines_from_daily": [
-        "2026-09",
         "2026-10"
       ],
       "funding_estimated_months": [
@@ -22,10 +21,10 @@
       "scoring_start": "2026-09-26",
       "closed_trades": 0,
       "open_positions": 1,
-      "return": -0.0014530634035012646,
-      "profit_factor": 0.0,
+      "return": 0.002157326337627774,
+      "profit_factor": Infinity,
       "max_drawdown": 0.0036898141942379725,
-      "avg_r": -0.29061268070027146,
+      "avg_r": 0.43146526752555986,
       "halted_at": null
     },
     {
@@ -35,10 +34,10 @@
       "scoring_start": "2026-09-26",
       "closed_trades": 1,
       "open_positions": 1,
-      "return": -0.0033596908360638,
-      "profit_factor": 0.39316461905591343,
+      "return": 0.001857289970339293,
+      "profit_factor": 1.3354681492047358,
       "max_drawdown": 0.01114134065426875,
-      "avg_r": -0.33475725169618853,
+      "avg_r": 0.1898452446305421,
       "halted_at": null
     },
     {
