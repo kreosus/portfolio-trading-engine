@@ -1,7 +1,7 @@
 {
   "registry": "paper-btc-2026-09-26",
-  "updated_at": "2026-10-29T10:22+00:00",
-  "data_through": "2026-10-28 00:00:00+00:00",
+  "updated_at": "2026-10-30T10:24+00:00",
+  "data_through": "2026-10-30 00:00:00+00:00",
   "funding_estimated_since": "2026-10-01 08:00:00+00:00",
   "coverage": {
     "BTCUSDT": {
@@ -19,12 +19,12 @@
       "sub_bot": "trend_pullback",
       "timeframe": "4h",
       "scoring_start": "2026-09-26",
-      "closed_trades": 4,
+      "closed_trades": 5,
       "open_positions": 0,
-      "return": -0.011802830824887312,
-      "profit_factor": 0.07661825053386176,
-      "max_drawdown": 0.020068650653116582,
-      "avg_r": -0.5920727670905035,
+      "return": -0.017021258665565475,
+      "profit_factor": 0.05440639874471222,
+      "max_drawdown": 0.023910341977173122,
+      "avg_r": -0.6848884419489742,
       "halted_at": null
     },
     {
@@ -32,12 +32,12 @@
       "sub_bot": "funding_momentum",
       "timeframe": "1h",
       "scoring_start": "2026-09-26",
-      "closed_trades": 9,
+      "closed_trades": 10,
       "open_positions": 0,
-      "return": -0.019855442406653157,
-      "profit_factor": 0.40041687440209983,
-      "max_drawdown": 0.029179640525145767,
-      "avg_r": -0.5577971817240326,
+      "return": -0.02247902030923543,
+      "profit_factor": 0.37102251105203454,
+      "max_drawdown": 0.03177826010912754,
+      "avg_r": -0.6090864823920439,
       "halted_at": null
     },
     {
