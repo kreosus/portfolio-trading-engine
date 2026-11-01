@@ -1,15 +1,16 @@
 {
   "registry": "paper-btc-2026-09-26",
-  "updated_at": "2026-10-31T09:55+00:00",
-  "data_through": "2026-10-31 00:00:00+00:00",
-  "funding_estimated_since": "2026-10-01 08:00:00+00:00",
+  "updated_at": "2026-11-01T10:46+00:00",
+  "data_through": "2026-11-01 00:00:00+00:00",
+  "funding_estimated_since": null,
   "coverage": {
     "BTCUSDT": {
       "klines_from_daily": [
-        "2026-10"
+        "2026-10",
+        "2026-11"
       ],
       "funding_estimated_months": [
-        "2026-10"
+        "2026-11"
       ]
     }
   },
@@ -21,10 +22,10 @@
       "scoring_start": "2026-09-26",
       "closed_trades": 5,
       "open_positions": 0,
-      "return": -0.017021258665565475,
-      "profit_factor": 0.05440639874471222,
-      "max_drawdown": 0.023910341977173122,
-      "avg_r": -0.6848884419489742,
+      "return": -0.01704436856732683,
+      "profit_factor": 0.05312405674201594,
+      "max_drawdown": 0.023912510754693583,
+      "avg_r": -0.6858297015268073,
       "halted_at": null
     },
     {
@@ -32,12 +33,12 @@
       "sub_bot": "funding_momentum",
       "timeframe": "1h",
       "scoring_start": "2026-09-26",
-      "closed_trades": 10,
+      "closed_trades": 9,
       "open_positions": 0,
-      "return": -0.02247902030923543,
-      "profit_factor": 0.37102251105203454,
-      "max_drawdown": 0.03177826010912754,
-      "avg_r": -0.6090864823920439,
+      "return": -0.019886944257780148,
+      "profit_factor": 0.39944385022595064,
+      "max_drawdown": 0.029180180720283166,
+      "avg_r": -0.5585272305165608,
       "halted_at": null
     },
     {
@@ -47,10 +48,10 @@
       "scoring_start": "2026-09-26",
       "closed_trades": 0,
       "open_positions": 1,
-      "return": 0.0017568104526384243,
+      "return": 0.0011630527080950248,
       "profit_factor": Infinity,
-      "max_drawdown": 0.0015088629204143,
-      "avg_r": 0.35136209052769335,
+      "max_drawdown": 0.002124204440050681,
+      "avg_r": 0.23261054161898717,
       "halted_at": null
     }
   ]
