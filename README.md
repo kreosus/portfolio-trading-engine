@@ -1,6 +1,6 @@
 # Paper trading (paper-btc-2026-09-26)
 
-Updated 2026-11-06T11:25+00:00 UTC. Market data through 2026-11-06 00:00:00+00:00 UTC.
+Updated 2026-11-07T10:38+00:00 UTC. Market data through 2026-11-07 00:00:00+00:00 UTC.
 Live risk rules, $10,000 per sub-bot, BTCUSDT perpetual, same engine as the backtests.
 
 **Provisional:** funding since 2026-11-01 08:00:00+00:00 is estimated from the premium index until Binance publishes the monthly file. Numbers after that date can still change.
