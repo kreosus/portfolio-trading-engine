@@ -1,13 +1,13 @@
 # Paper trading (paper-btc-2026-09-26)
 
-Updated 2026-11-27T13:01+00:00 UTC. Market data through 2026-11-27 00:00:00+00:00 UTC.
+Updated 2026-11-28T12:14+00:00 UTC. Market data through 2026-11-28 00:00:00+00:00 UTC.
 Live risk rules, $10,000 per sub-bot, BTCUSDT perpetual, same engine as the backtests.
 
 **Provisional:** funding since 2026-11-01 08:00:00+00:00 is estimated from the premium index until Binance publishes the monthly file. Numbers after that date can still change.
 
 | Entry | Scoring since | Closed trades | Open | Return | Profit factor | Max DD | Avg R | Halted |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| trend_pullback_4h | 2026-09-26 | 6 | 0 | -1.97% | 0.05 | 2.7% | -0.66 | no |
+| trend_pullback_4h | 2026-09-26 | 6 | 1 | -1.95% | 0.06 | 2.7% | -0.56 | no |
 | funding_momentum_1h | 2026-09-26 | 9 | 0 | -1.99% | 0.40 | 2.9% | -0.56 | no |
 | vol_breakout_4h | 2026-09-26 | 1 | 0 | -0.17% | 0.00 | 0.7% | -0.34 | no |
 
